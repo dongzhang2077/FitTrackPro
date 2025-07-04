@@ -1,4 +1,4 @@
-package com.domcheung.fittrackpro.presentation.register
+package com.domcheung.fittrackpro.presentation.login
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -13,21 +13,18 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.domcheung.fittrackpro.data.model.User
 
 @Composable
-fun RegisterScreen(
-    viewModel: RegisterViewModel = hiltViewModel(),
-    onRegisterSuccess: () -> Unit,
-    onNavigateToLogin: () -> Unit = {}
+fun LoginScreen(
+    viewModel: LoginViewModel = hiltViewModel(),
+    onLoginSuccess: () -> Unit,
+    onNavigateToRegister: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    var confirmPassword by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
-    var confirmPasswordVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -46,7 +43,7 @@ fun RegisterScreen(
 
         // Page title
         Text(
-            text = "Create Account",
+            text = "Welcome Back",
             style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(bottom = 32.dp)
@@ -55,7 +52,10 @@ fun RegisterScreen(
         // Email field
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = {
+                email = it
+                viewModel.clearError() // Clear error when user types
+            },
             label = { Text("Email") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -64,10 +64,13 @@ fun RegisterScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Password field with visibility toggle
+        // Password field with click toggle visibility
         OutlinedTextField(
             value = password,
-            onValueChange = { password = it },
+            onValueChange = {
+                password = it
+                viewModel.clearError() // Clear error when user types
+            },
             label = { Text("Password") },
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
@@ -76,29 +79,10 @@ fun RegisterScreen(
                 else Icons.Filled.VisibilityOff
 
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(imageVector = image, contentDescription = if (passwordVisible) "Hide password" else "Show password")
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            enabled = !uiState.isLoading
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Confirm password field with visibility toggle
-        OutlinedTextField(
-            value = confirmPassword,
-            onValueChange = { confirmPassword = it },
-            label = { Text("Confirm Password") },
-            visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                val image = if (confirmPasswordVisible)
-                    Icons.Filled.Visibility
-                else Icons.Filled.VisibilityOff
-
-                IconButton(onClick = { confirmPasswordVisible = !confirmPasswordVisible }) {
-                    Icon(imageVector = image, contentDescription = if (confirmPasswordVisible) "Hide password" else "Show password")
+                    Icon(
+                        imageVector = image,
+                        contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                    )
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -119,14 +103,10 @@ fun RegisterScreen(
             )
         }
 
-        // Register button
+        // Login button
         Button(
             onClick = {
-                val user = User(
-                    name = "", // Will be filled in onboarding
-                    email = email
-                )
-                viewModel.registerUser(email, password, confirmPassword, user)
+                viewModel.loginUser(email, password)
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = !uiState.isLoading
@@ -138,23 +118,23 @@ fun RegisterScreen(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            Text("📝 Register")
+            Text("🚀 Sign In")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Navigate to login
-        TextButton(onClick = onNavigateToLogin) {
+        // Navigate to register
+        TextButton(onClick = onNavigateToRegister) {
             Text(
-                text = "Already have an account? Sign In",
+                text = "Don't have an account? Register",
                 style = MaterialTheme.typography.bodyMedium
             )
         }
 
-        // Handle registration success
+        // Handle login success
         if (uiState.isSuccess) {
             LaunchedEffect(Unit) {
-                onRegisterSuccess()
+                onLoginSuccess()
             }
         }
     }

@@ -93,4 +93,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
+    // material design
+    implementation("androidx.compose.material:material-icons-extended")
+    // navigation
+    implementation("androidx.navigation:navigation-compose:2.7.6")
+
 }

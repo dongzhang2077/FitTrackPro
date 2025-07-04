@@ -14,6 +14,7 @@ class AuthRepositoryImpl(
     private val firestore: FirebaseFirestore
 ) : AuthRepository {
 
+    // Existing register method (keep as is)
     override fun registerUser(email: String, password: String, user: User): Flow<Result<FirebaseUser?>> = callbackFlow {
         auth.createUserWithEmailAndPassword(email, password)
             .addOnCompleteListener { task ->
@@ -36,5 +37,30 @@ class AuthRepositoryImpl(
             }
 
         awaitClose { }
+    }
+
+    // New login method implementation
+    override fun loginUser(email: String, password: String): Flow<Result<FirebaseUser?>> = callbackFlow {
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val firebaseUser = auth.currentUser
+                    trySend(Result.success(firebaseUser))
+                } else {
+                    trySend(Result.failure(task.exception ?: Exception("Login failed")))
+                }
+            }
+
+        awaitClose { }
+    }
+
+    // Get current logged in user
+    override fun getCurrentUser(): FirebaseUser? {
+        return auth.currentUser
+    }
+
+    // Sign out current user
+    override fun signOut() {
+        auth.signOut()
     }
 }
