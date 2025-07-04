@@ -379,6 +379,7 @@ private fun SettingItemRow(item: SettingItem) {
 @Composable
 private fun SignOutCard(onSignOut: () -> Unit) {
     Card(
+        onClick = onSignOut, // 添加整个卡片的点击事件
         modifier = Modifier
             .fillMaxWidth()
             .clip(HandDrawnShapes.actionCard),
@@ -418,7 +419,10 @@ private fun SignOutCard(onSignOut: () -> Unit) {
             }
 
             TextButton(
-                onClick = onSignOut,
+                onClick = {
+                    println("DEBUG: Sign Out button clicked!")
+                    onSignOut()
+                },
                 colors = ButtonDefaults.textButtonColors(
                     contentColor = MaterialTheme.colorScheme.error
                 )

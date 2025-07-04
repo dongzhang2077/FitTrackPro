@@ -10,19 +10,21 @@ import androidx.navigation.compose.rememberNavController
 import com.domcheung.fittrackpro.presentation.login.LoginScreen
 import com.domcheung.fittrackpro.presentation.register.RegisterScreen
 import com.domcheung.fittrackpro.presentation.main.MainTabScreen
+import com.domcheung.fittrackpro.presentation.splash.SplashScreen
 
 // Navigation routes
 object Routes {
+    const val SPLASH = "splash"   // New splash screen
     const val LOGIN = "login"
     const val REGISTER = "register"
-    const val MAIN = "main"     // New main app with tabs
-    const val HOME = "home"     // Individual tab - for future deep linking
+    const val MAIN = "main"       // Main app with tabs
+    const val HOME = "home"       // Individual tab - for future deep linking
 }
 
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Routes.LOGIN
+    startDestination: String = Routes.SPLASH  // Start with splash screen
 ) {
     NavHost(
         navController = navController,
@@ -53,6 +55,22 @@ fun AppNavigation(
             ) + fadeOut(animationSpec = tween(300))
         }
     ) {
+        // Splash Screen (new starting point)
+        composable(Routes.SPLASH) {
+            SplashScreen(
+                onNavigateToLogin = {
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                },
+                onNavigateToMain = {
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.SPLASH) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         // Login Screen
         composable(Routes.LOGIN) {
             LoginScreen(
@@ -86,6 +104,7 @@ fun AppNavigation(
         composable(Routes.MAIN) {
             MainTabScreen(
                 onSignOut = {
+                    println("DEBUG: AppNavigation - onSignOut called")
                     // Navigate back to login and clear main from back stack
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.MAIN) { inclusive = true }
