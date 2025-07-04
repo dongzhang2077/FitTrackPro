@@ -20,8 +20,6 @@ import com.domcheung.fittrackpro.presentation.model.MainTab
 import com.domcheung.fittrackpro.presentation.model.TabItem
 import com.domcheung.fittrackpro.presentation.model.TabDestinations
 
-
-
 @Composable
 fun FitTrackBottomNavigation(
     selectedTab: MainTab,
@@ -75,21 +73,11 @@ private fun CentralStartButton(
         containerColor = MaterialTheme.colorScheme.primary,
         contentColor = MaterialTheme.colorScheme.onPrimary
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Start Workout",
-                modifier = Modifier.size(24.dp)
-            )
-            Text(
-                text = "START",
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        Icon(
+            imageVector = Icons.Default.PlayArrow,
+            contentDescription = "Start Workout",
+            modifier = Modifier.size(28.dp)
+        )
     }
 }
 
@@ -110,23 +98,11 @@ private fun RegularTabItem(
         onClick = onClick,
         modifier = modifier
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = tabItem.icon,
-                contentDescription = tabItem.label,
-                tint = color,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = tabItem.label,
-                color = color,
-                fontSize = 10.sp,
-                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-            )
-        }
+        Icon(
+            imageVector = tabItem.icon,
+            contentDescription = tabItem.label,
+            tint = color,
+            modifier = Modifier.size(24.dp)
+        )
     }
 }
