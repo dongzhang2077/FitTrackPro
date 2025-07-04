@@ -5,16 +5,12 @@ title: "[LOG] YYYY-MM-DD - "
 labels: log, ideas
 assignees: ""
 ---
-
-## 📅 Date
-
 ## 💡 Ideas & Thoughts
 
 ## 🔧 Progress
 
 ## 🐛 Issues Found
-
-<!-- See bugs -->
+<!-- Check bugs -->
 
 ## 📚 Learning Notes
 
