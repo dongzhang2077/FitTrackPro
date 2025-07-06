@@ -417,3 +417,21 @@ class SyncDataUseCase @Inject constructor(
         return repository.hasUnsyncedData()
     }
 }
+
+@Singleton
+class GetWorkoutSessionUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(sessionId: String): WorkoutSession? {
+        return repository.getWorkoutSessionById(sessionId)
+    }
+}
+
+@Singleton
+class AbandonWorkoutSessionUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(sessionId: String): Result<Unit> {
+        return repository.abandonWorkoutSession(sessionId)
+    }
+}
