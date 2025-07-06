@@ -31,8 +31,10 @@ fun MainTabScreen(
                 selectedTab = selectedTab,
                 onTabSelected = { tab ->
                     if (tab == MainTab.START) {
-                        // Placeholder action for START button
-                        Toast.makeText(context, "Start Workout - Coming Soon!", Toast.LENGTH_SHORT).show()
+                        // START button now navigates to Home and triggers quick start
+                        selectedTab = MainTab.HOME
+                        // The HomeScreen will handle the quick start logic
+                        Toast.makeText(context, "Quick Start Workout!", Toast.LENGTH_SHORT).show()
                     } else {
                         selectedTab = tab
                     }
@@ -55,10 +57,47 @@ fun MainTabScreen(
                 label = "tab_content"
             ) { tab ->
                 when (tab) {
-                    MainTab.HOME -> HomeScreen()
+                    MainTab.HOME -> HomeScreen(
+                        onNavigateToWorkout = {
+                            // Navigate to Workout tab
+                            selectedTab = MainTab.WORKOUT
+                        },
+                        onNavigateToProgress = {
+                            // Navigate to Progress tab
+                            selectedTab = MainTab.PROGRESS
+                        },
+                        onNavigateToWorkoutSession = { sessionId ->
+                            // TODO: Navigate to workout execution screen
+                            // For now, show a toast and navigate to workout tab
+                            Toast.makeText(
+                                context,
+                                "Starting workout session: $sessionId",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            selectedTab = MainTab.WORKOUT
+                        }
+                    )
+
                     MainTab.WORKOUT -> WorkoutScreen()
-                    MainTab.START -> HomeScreen() // Fallback, shouldn't be reached
+
+                    MainTab.START -> {
+                        // Fallback, shouldn't be reached
+                        HomeScreen(
+                            onNavigateToWorkout = { selectedTab = MainTab.WORKOUT },
+                            onNavigateToProgress = { selectedTab = MainTab.PROGRESS },
+                            onNavigateToWorkoutSession = { sessionId ->
+                                Toast.makeText(
+                                    context,
+                                    "Starting workout session: $sessionId",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                                selectedTab = MainTab.WORKOUT
+                            }
+                        )
+                    }
+
                     MainTab.PROGRESS -> ProgressScreen()
+
                     MainTab.PROFILE -> ProfileScreen(
                         onSignOut = {
                             println("DEBUG: MainTabScreen - onSignOut called")
