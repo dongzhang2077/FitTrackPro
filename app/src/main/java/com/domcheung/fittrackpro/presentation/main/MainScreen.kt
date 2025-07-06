@@ -78,7 +78,28 @@ fun MainTabScreen(
                         }
                     )
 
-                    MainTab.WORKOUT -> WorkoutScreen()
+                    MainTab.WORKOUT -> WorkoutScreen(
+                        onNavigateToWorkoutSession = { sessionId ->
+                            // TODO: Navigate to workout execution screen
+                            // For now, show a toast
+                            Toast.makeText(
+                                context,
+                                "Starting workout session: $sessionId",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            // Could also stay on workout tab or navigate to a specific workout execution screen
+                        },
+                        onNavigateToCreatePlan = {
+                            // TODO: Navigate to create plan screen
+                            // For now, show a toast
+                            Toast.makeText(
+                                context,
+                                "Create Plan - Coming Soon!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            // Could navigate to a dedicated create plan screen
+                        }
+                    )
 
                     MainTab.START -> {
                         // Fallback, shouldn't be reached
