@@ -15,32 +15,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.data.model.PersonalRecord
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 
-// Sample data models
-data class PersonalRecord(
-    val exercise: String,
-    val weight: String,
-    val date: String,
-    val improvement: String? = null
-)
-
-data class WeeklyActivity(
-    val day: String,
-    val isCompleted: Boolean,
-    val dayOfMonth: Int
-)
-
-enum class TimeRange(val label: String) {
-    WEEK("Week"),
-    MONTH("Month"),
-    YEAR("Year")
-}
-
 @Composable
-fun ProgressScreen() {
-    var selectedTimeRange by remember { mutableStateOf(TimeRange.WEEK) }
+fun ProgressScreen(
+    viewModel: ProgressViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val workoutStatistics by viewModel.workoutStatistics.collectAsState()
+    val personalRecords by viewModel.personalRecords.collectAsState()
+    val recentPersonalRecords by viewModel.recentPersonalRecords.collectAsState()
+    val filteredData by viewModel.filteredData.collectAsState()
+
+    // Show error snackbar
+    uiState.errorMessage?.let { errorMessage ->
+        LaunchedEffect(errorMessage) {
+            // In a real app, you would show a SnackBar here
+            viewModel.clearError()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -56,24 +53,43 @@ fun ProgressScreen() {
         // Time range selector
         item {
             TimeRangeSelector(
-                selectedRange = selectedTimeRange,
-                onRangeSelected = { selectedTimeRange = it }
+                selectedRange = uiState.selectedTimeRange,
+                onRangeSelected = { viewModel.changeTimeRange(it) }
             )
         }
 
         // Weekly activity chart
         item {
-            WeeklyActivityCard()
+            WeeklyActivityCard(
+                weeklyData = viewModel.getWeeklyActivityData(),
+                isLoading = uiState.isLoading
+            )
         }
 
-        // Personal records
+        // Personal records section
         item {
-            PersonalRecordsCard()
+            PersonalRecordsCard(
+                allRecords = personalRecords,
+                recentRecords = recentPersonalRecords,
+                topRecords = viewModel.getTopWeightRecords(),
+                isLoading = uiState.isLoading
+            )
         }
 
         // Achievement stats
         item {
-            AchievementStatsCard()
+            AchievementStatsCard(
+                achievementStats = viewModel.getAchievementStats(),
+                isLoading = uiState.isLoading
+            )
+        }
+
+        // Workout statistics summary
+        item {
+            StatisticsSummaryCard(
+                statistics = workoutStatistics,
+                isLoading = uiState.isLoading
+            )
         }
     }
 }
@@ -97,8 +113,8 @@ private fun ProgressHeader() {
 
 @Composable
 private fun TimeRangeSelector(
-    selectedRange: TimeRange,
-    onRangeSelected: (TimeRange) -> Unit
+    selectedRange: ProgressTimeRange,
+    onRangeSelected: (ProgressTimeRange) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -114,7 +130,7 @@ private fun TimeRangeSelector(
                 .padding(8.dp),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            TimeRange.values().forEach { range ->
+            ProgressTimeRange.values().forEach { range ->
                 FilterChip(
                     onClick = { onRangeSelected(range) },
                     label = { Text(range.label) },
@@ -127,17 +143,10 @@ private fun TimeRangeSelector(
 }
 
 @Composable
-private fun WeeklyActivityCard() {
-    val weeklyData = listOf(
-        WeeklyActivity("Mon", true, 1),
-        WeeklyActivity("Tue", true, 2),
-        WeeklyActivity("Wed", false, 3),
-        WeeklyActivity("Thu", true, 4),
-        WeeklyActivity("Fri", false, 5),
-        WeeklyActivity("Sat", false, 6),
-        WeeklyActivity("Sun", false, 7)
-    )
-
+private fun WeeklyActivityCard(
+    weeklyData: List<WeeklyActivityData>,
+    isLoading: Boolean
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -167,26 +176,48 @@ private fun WeeklyActivityCard() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Weekly activity visualization
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                weeklyData.forEach { day ->
-                    WeeklyActivityItem(
-                        day = day.day,
-                        isCompleted = day.isCompleted
-                    )
+            if (isLoading) {
+                // Loading placeholder
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    repeat(7) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                    }
                 }
+            } else {
+                // Weekly activity visualization
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    weeklyData.forEach { day ->
+                        WeeklyActivityItem(
+                            day = day.day,
+                            dayOfMonth = day.dayOfMonth,
+                            isCompleted = day.isCompleted,
+                            isToday = day.isToday,
+                            isPast = day.isPast
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val completedCount = weeklyData.count { it.isCompleted }
+                val totalDays = weeklyData.size
+                Text(
+                    text = "Completed: $completedCount/$totalDays this week",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Text(
-                text = "Completed: 3/3 planned workouts",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -194,7 +225,10 @@ private fun WeeklyActivityCard() {
 @Composable
 private fun WeeklyActivityItem(
     day: String,
-    isCompleted: Boolean
+    dayOfMonth: Int,
+    isCompleted: Boolean,
+    isToday: Boolean,
+    isPast: Boolean
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally
@@ -204,10 +238,12 @@ private fun WeeklyActivityItem(
                 .size(40.dp)
                 .clip(CircleShape)
                 .background(
-                    if (isCompleted)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.outline
+                    when {
+                        isCompleted -> MaterialTheme.colorScheme.primary
+                        isToday -> MaterialTheme.colorScheme.primaryContainer
+                        isPast -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        else -> MaterialTheme.colorScheme.outline
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -218,6 +254,22 @@ private fun WeeklyActivityItem(
                     tint = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.size(20.dp)
                 )
+            } else if (isToday) {
+                Text(
+                    text = dayOfMonth.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Text(
+                    text = dayOfMonth.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isPast)
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
 
@@ -226,22 +278,23 @@ private fun WeeklyActivityItem(
         Text(
             text = day,
             style = MaterialTheme.typography.bodySmall,
-            color = if (isCompleted)
-                MaterialTheme.colorScheme.primary
-            else
-                MaterialTheme.colorScheme.onSurfaceVariant
+            color = when {
+                isCompleted -> MaterialTheme.colorScheme.primary
+                isToday -> MaterialTheme.colorScheme.primary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal
         )
     }
 }
 
 @Composable
-private fun PersonalRecordsCard() {
-    val personalRecords = listOf(
-        PersonalRecord("Bench Press", "70kg", "3 days ago", "+5kg"),
-        PersonalRecord("Squat", "90kg", "1 week ago", "+10kg"),
-        PersonalRecord("Deadlift", "100kg", "2 weeks ago", "+15kg")
-    )
-
+private fun PersonalRecordsCard(
+    allRecords: List<PersonalRecord>,
+    recentRecords: List<PersonalRecord>,
+    topRecords: List<PersonalRecord>,
+    isLoading: Boolean
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -271,10 +324,61 @@ private fun PersonalRecordsCard() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            personalRecords.forEach { record ->
-                PersonalRecordItem(record = record)
-                if (record != personalRecords.last()) {
+            if (isLoading) {
+                // Loading placeholders
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .clip(MaterialTheme.shapes.small)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    )
+                    if (it < 2) Spacer(modifier = Modifier.height(8.dp))
+                }
+            } else if (topRecords.isEmpty()) {
+                // Empty state
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.EmojiEvents,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "No personal records yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Start working out to set your first records!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                // Show top records
+                topRecords.take(5).forEach { record ->
+                    PersonalRecordItem(record = record)
+                    if (record != topRecords.last()) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+
+                if (recentRecords.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "🔥 Recent achievements: ${recentRecords.size} in the last 30 days",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             }
         }
@@ -290,12 +394,13 @@ private fun PersonalRecordItem(record: PersonalRecord) {
     ) {
         Column {
             Text(
-                text = record.exercise,
+                text = record.exerciseName,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = record.date,
+                text = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    .format(java.util.Date(record.achievedAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -305,32 +410,34 @@ private fun PersonalRecordItem(record: PersonalRecord) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = record.weight,
+                text = "${record.weight}kg × ${record.reps}",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
 
-            record.improvement?.let { improvement ->
-                Spacer(modifier = Modifier.width(8.dp))
-                Surface(
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = improvement,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                    text = record.recordType.name.replace("_", " "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun AchievementStatsCard() {
+private fun AchievementStatsCard(
+    achievementStats: AchievementStats,
+    isLoading: Boolean
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -350,30 +457,58 @@ private fun AchievementStatsCard() {
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                AchievementStatItem(
-                    icon = Icons.Default.LocalFireDepartment,
-                    value = "7",
-                    label = "Day Streak",
-                    color = MaterialTheme.colorScheme.error
-                )
+            if (isLoading) {
+                // Loading placeholders
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp, 40.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    AchievementStatItem(
+                        icon = Icons.Default.LocalFireDepartment,
+                        value = "${achievementStats.currentStreak}",
+                        label = "Day Streak",
+                        color = MaterialTheme.colorScheme.error
+                    )
 
-                AchievementStatItem(
-                    icon = Icons.Default.EmojiEvents,
-                    value = "12",
-                    label = "Total PRs",
-                    color = MaterialTheme.colorScheme.tertiary
-                )
+                    AchievementStatItem(
+                        icon = Icons.Default.EmojiEvents,
+                        value = "${achievementStats.totalPersonalRecords}",
+                        label = "Total PRs",
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
 
-                AchievementStatItem(
-                    icon = Icons.Default.Timeline,
-                    value = "85%",
-                    label = "Goal Rate",
-                    color = MaterialTheme.colorScheme.primary
-                )
+                    AchievementStatItem(
+                        icon = Icons.Default.Timeline,
+                        value = "${achievementStats.averageCompletion.toInt()}%",
+                        label = "Completion",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (achievementStats.recentPersonalRecords > 0) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "🎉 ${achievementStats.recentPersonalRecords} new personal records this month!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
@@ -409,6 +544,151 @@ private fun AchievementStatItem(
             text = label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun StatisticsSummaryCard(
+    statistics: com.domcheung.fittrackpro.data.repository.WorkoutStatistics?,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.progressCard),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Analytics,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "📈 Overall Statistics",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isLoading) {
+                // Loading placeholders
+                repeat(2) { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        repeat(2) {
+                            Box(
+                                modifier = Modifier
+                                    .size(100.dp, 40.dp)
+                                    .clip(MaterialTheme.shapes.small)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                            )
+                        }
+                    }
+                    if (row == 0) Spacer(modifier = Modifier.height(16.dp))
+                }
+            } else if (statistics == null) {
+                // Empty state
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Analytics,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "No workout data yet",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = "Complete your first workout to see statistics",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            } else {
+                // First row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatisticItem(
+                        label = "Total Workouts",
+                        value = "${statistics.totalWorkouts}",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    StatisticItem(
+                        label = "Total Volume",
+                        value = "${(statistics.totalVolumeLifted / 1000).toInt()}k kg",
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Second row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    StatisticItem(
+                        label = "Avg Duration",
+                        value = "${(statistics.averageWorkoutDuration / 60000)}min",
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+
+                    StatisticItem(
+                        label = "Completion Rate",
+                        value = "${statistics.averageCompletionRate.toInt()}%",
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatisticItem(
+    label: String,
+    value: String,
+    color: androidx.compose.ui.graphics.Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
