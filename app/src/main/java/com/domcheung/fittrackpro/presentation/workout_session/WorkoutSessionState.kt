@@ -1,5 +1,7 @@
 package com.domcheung.fittrackpro.presentation.workout_session
 
+import com.domcheung.fittrackpro.data.model.PersonalRecord
+
 data class WorkoutSessionState(
     // Loading and error states
     val isLoading: Boolean = true,
@@ -31,7 +33,8 @@ data class WorkoutSessionState(
     val showCompleteDialog: Boolean = false,
     val showSettingsDialog: Boolean = false,
     val showReplaceExerciseDialog: Boolean = false,
-    val showFinishWorkoutDialog: Boolean = false
+    val showFinishWorkoutDialog: Boolean = false,
+    val newlyAchievedRecords: List<PersonalRecord> = emptyList()
 ) {
     val canCompleteWorkout: Boolean
         get() = elapsedTime > 0

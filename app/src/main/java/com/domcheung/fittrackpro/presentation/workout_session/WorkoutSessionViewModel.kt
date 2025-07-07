@@ -3,6 +3,7 @@ package com.domcheung.fittrackpro.presentation.workout_session
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.domcheung.fittrackpro.data.model.ExecutedExercise
 import com.domcheung.fittrackpro.data.model.ExecutedSet
 import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.model.WorkoutStatus
@@ -31,7 +32,7 @@ class WorkoutSessionViewModel @Inject constructor(
     private val pauseWorkoutSessionUseCase: PauseWorkoutSessionUseCase,
     private val resumeWorkoutSessionUseCase: ResumeWorkoutSessionUseCase,
     private val abandonWorkoutSessionUseCase: AbandonWorkoutSessionUseCase,
-    private val checkAndCreatePersonalRecordUseCase: CheckAndCreatePersonalRecordUseCase // Will be used in the next step
+    private val checkAndCreatePersonalRecordUseCase: CheckAndCreatePersonalRecordUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WorkoutSessionState())
@@ -39,7 +40,6 @@ class WorkoutSessionViewModel @Inject constructor(
 
     private val sessionId: String = savedStateHandle.get<String>(Routes.WORKOUT_SESSION_ARG_ID)!!
 
-    // This is the single source of truth for session data, reacting to database changes.
     val currentSession: StateFlow<WorkoutSession?> = getWorkoutSessionByIdFlowUseCase(sessionId)
         .stateIn(
             scope = viewModelScope,
@@ -48,18 +48,15 @@ class WorkoutSessionViewModel @Inject constructor(
         )
 
     companion object {
-        // 3 hours in milliseconds, for the auto-pause feature.
-        private const val MAX_WORKOUT_DURATION = 3 * 60 * 60 * 1000L
+        private const val MAX_WORKOUT_DURATION = 3 * 60 * 60 * 1000L // 3 hours
     }
 
     init {
-        // A single reactive loop to handle all time and state updates.
         initializeReactiveUpdaters()
     }
 
     private fun initializeReactiveUpdaters() {
         viewModelScope.launch {
-            // A simple flow that ticks every second to drive UI updates.
             val ticker = flow {
                 while (true) {
                     emit(Unit)
@@ -67,41 +64,39 @@ class WorkoutSessionViewModel @Inject constructor(
                 }
             }
 
-            // Combine the session data with the ticker.
-            // This block will re-execute whenever the session data changes OR every second.
             currentSession.filterNotNull().combine(ticker) { session, _ -> session }
                 .collect { session ->
                     val state = _uiState.value
 
-                    // --- Timer A: Overall Workout Duration ---
-                    val elapsedTime = if (session.status == WorkoutStatus.PAUSED) {
-                        (session.pauseStartTime ?: System.currentTimeMillis()) - session.startTime - session.pausedDuration
-                    } else {
+                    // --- NEW, ROBUST TIMER LOGIC ---
+                    // Timer A (Total Duration) runs unless explicitly PAUSED.
+                    val elapsedTime = if (session.status != WorkoutStatus.PAUSED) {
                         System.currentTimeMillis() - session.startTime - session.pausedDuration
+                    } else {
+                        (session.pauseStartTime ?: System.currentTimeMillis()) - session.startTime - session.pausedDuration
                     }
 
-                    // --- Timer B: Rest Countdown ---
+                    // Timer B (Rest Countdown) runs ONLY when status is RESTING.
                     var restTimeRemaining = state.restTimeRemaining
-                    if (state.isCurrentlyResting && session.status != WorkoutStatus.PAUSED) {
+                    if (session.status == WorkoutStatus.RESTING) {
                         if (restTimeRemaining >= 1000) {
                             restTimeRemaining -= 1000
                         } else {
                             restTimeRemaining = 0
-                            endRestAndMoveOn() // Rest is over
+                            resumeWorkout() // Rest is over, resume to IN_PROGRESS
                         }
                     }
 
-                    // --- Update the entire UI State at once ---
                     _uiState.update {
                         it.copy(
                             elapsedTime = elapsedTime.coerceAtLeast(0L),
                             restTimeRemaining = restTimeRemaining,
-                            isLoading = false,
-                            isCurrentlyResting = state.isCurrentlyResting && restTimeRemaining > 0 // Only show rest screen if time > 0
+                            // The UI for resting is now directly driven by the database status.
+                            isCurrentlyResting = session.status == WorkoutStatus.RESTING,
+                            isLoading = false
                         )
                     }
 
-                    // --- Timer Limit Check ---
                     if (elapsedTime > MAX_WORKOUT_DURATION && session.status == WorkoutStatus.IN_PROGRESS) {
                         pauseWorkout()
                     }
@@ -110,70 +105,56 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Completes the current set, saves data, and then decides the next step.
-     * If it's the final set of the final exercise, it prompts the user to finish the workout.
-     * Otherwise, it starts the rest timer.
-     */
-    /**
-     * Completes the current set, saves data, and then decides the next step.
-     * If it's the final set of the final exercise, it updates the state to show the
-     * final completion UI elements and prompts the user to finish the workout.
-     * Otherwise, it starts the rest timer.
+     * Completes the current set, saves data, and puts the session into a RESTING state.
      */
     fun completeCurrentSet() = viewModelScope.launch {
         val session = currentSession.value ?: return@launch
         val state = _uiState.value
-
-        // Check if this is the last set of the last exercise BEFORE updating data
+        val userId = session.userId
         val currentExercise = session.exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
-        val isLastSet = state.currentSetIndex >= currentExercise.plannedSets.size - 1
-        val isLastExercise = state.currentExerciseIndex >= session.exercises.size - 1
 
-        // Save the data regardless
         val updatedSession = updateSetInData(session, isSkipped = false)
         updateWorkoutSessionUseCase(updatedSession)
 
+        // Check for PRs
+        checkAndCreatePersonalRecordUseCase(
+            userId = userId,
+            exerciseId = currentExercise.exerciseId,
+            weight = state.currentWeight,
+            reps = state.currentReps,
+            sessionId = session.id
+        ).getOrNull()?.let { newRecords ->
+            if (newRecords.isNotEmpty()) {
+                _uiState.update { it.copy(newlyAchievedRecords = newRecords) }
+            }
+        }
+
+        val isLastSet = state.currentSetIndex >= currentExercise.plannedSets.size - 1
+        val isLastExercise = state.currentExerciseIndex >= updatedSession.exercises.size - 1
+
         if (isLastSet && isLastExercise) {
-            // --- THIS IS THE NEW LOGIC ---
-            // It's the very end of the planned workout.
-            // Update state to show the final confirmation dialog AND the final complete button.
-            _uiState.update { it.copy(
-                isAllSetsCompleted = true,
-                showFinishWorkoutDialog = true
-            )}
+            _uiState.update { it.copy(isAllSetsCompleted = true, showFinishWorkoutDialog = true) }
         } else {
-            // It's not the end yet, start the rest timer as usual.
+            // --- NEW LOGIC: Set the session status to RESTING ---
             val restTime = currentExercise.restBetweenSets.toLong() * 1000
-            _uiState.update { it.copy(isCurrentlyResting = true, restTimeRemaining = restTime, totalRestTime = restTime) }
-            // Also pause the main timer while resting
-            pauseWorkout()
+            _uiState.update { it.copy(totalRestTime = restTime, restTimeRemaining = restTime) }
+            // This call now correctly transitions the session to a resting state.
+            pauseWorkoutSessionUseCase(sessionId, isResting = true)
         }
     }
 
     /**
-     * Skips the current set and moves to the next step immediately without resting.
+     * Skips the current set and moves to the next step immediately.
      */
     fun skipCurrentSet() = viewModelScope.launch {
         val session = currentSession.value ?: return@launch
         val updatedSession = updateSetInData(session, isSkipped = true)
         updateWorkoutSessionUseCase(updatedSession)
-        endRestAndMoveOn()
+        moveToNextStep(updatedSession)
     }
 
     /**
-     * Called when rest is over or skipped. Resets rest state and moves to the next step.
-     */
-    private fun endRestAndMoveOn() {
-        _uiState.update { it.copy(isCurrentlyResting = false, restTimeRemaining = 0) }
-        viewModelScope.launch {
-            val session = currentSession.value ?: return@launch
-            moveToNextStep(session)
-        }
-    }
-
-    /**
-     * Contains the logic to advance to the next set or the next exercise.
-     * This also updates the UI state to pre-fill the inputs for the next set.
+     * Moves the workout to the next set or exercise.
      */
     private fun moveToNextStep(session: WorkoutSession) {
         val state = _uiState.value
@@ -183,23 +164,19 @@ class WorkoutSessionViewModel @Inject constructor(
         val isLastExercise = state.currentExerciseIndex >= session.exercises.size - 1
 
         if (isLastSet) {
-            // All sets for the current exercise are done.
             if (!isLastExercise) {
-                // Move to the next EXERCISE
                 val nextExerciseIndex = state.currentExerciseIndex + 1
                 val nextExercise = session.exercises[nextExerciseIndex]
                 _uiState.update {
                     it.copy(
                         currentExerciseIndex = nextExerciseIndex,
-                        currentSetIndex = 0, // Reset set index for new exercise
+                        currentSetIndex = 0,
                         currentWeight = nextExercise.plannedSets.first().targetWeight,
                         currentReps = nextExercise.plannedSets.first().targetReps
                     )
                 }
             }
-            // If it's the last exercise AND the last set, do nothing. User must click "Complete Workout".
         } else {
-            // Move to the next SET
             val nextSetIndex = state.currentSetIndex + 1
             val nextSet = currentExercise.plannedSets[nextSetIndex]
             _uiState.update {
@@ -213,49 +190,34 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * A pure helper function. It takes a session and returns a NEW session object
-     * with the latest executed set data. It does not modify the state directly.
-     * @param session The current workout session.
-     * @param isSkipped True if the set was skipped, false if it was completed.
-     * @return A new WorkoutSession instance with the updated data.
+     * A pure helper function to update session data immutably.
      */
     private fun updateSetInData(session: WorkoutSession, isSkipped: Boolean): WorkoutSession {
+        // ... (This function's internal logic remains unchanged)
         val state = _uiState.value
         val exercises = session.exercises.toMutableList()
         val currentExercise = exercises.getOrNull(state.currentExerciseIndex) ?: return session
-
         val executedSets = currentExercise.executedSets.toMutableList()
         val setNumber = state.currentSetIndex + 1
-
-        val newSet = ExecutedSet(
-            setNumber = setNumber,
-            plannedWeight = currentExercise.plannedSets.getOrNull(state.currentSetIndex)?.targetWeight ?: 0f,
-            plannedReps = currentExercise.plannedSets.getOrNull(state.currentSetIndex)?.targetReps ?: 0,
-            actualWeight = if (isSkipped) 0f else state.currentWeight,
-            actualReps = if (isSkipped) 0 else state.currentReps,
-            isCompleted = !isSkipped,
-            isSkipped = isSkipped,
-            completedAt = System.currentTimeMillis()
-        )
-
-        // Remove any previous attempt for this set number before adding the new one.
+        val newSet = ExecutedSet(setNumber = setNumber, plannedWeight = currentExercise.plannedSets.getOrNull(state.currentSetIndex)?.targetWeight ?: 0f, plannedReps = currentExercise.plannedSets.getOrNull(state.currentSetIndex)?.targetReps ?: 0, actualWeight = if (isSkipped) 0f else state.currentWeight, actualReps = if (isSkipped) 0 else state.currentReps, isCompleted = !isSkipped, isSkipped = isSkipped, completedAt = System.currentTimeMillis())
         executedSets.removeAll { it.setNumber == setNumber }
         executedSets.add(newSet)
-
-        // Update the specific exercise in the list with the new list of executed sets.
         exercises[state.currentExerciseIndex] = currentExercise.copy(executedSets = executedSets.sortedBy { it.setNumber })
-
-        // Return a new session object with the updated exercises list.
-        return session.copy(exercises = exercises)
+        val newCompletionPercentage = calculateCompletionPercentage(exercises)
+        val newTotalVolume = calculateTotalVolume(exercises)
+        return session.copy(exercises = exercises, completionPercentage = newCompletionPercentage, totalVolume = newTotalVolume)
     }
 
-    // --- Public Event Handlers for UI actions ---
-
+    // --- Public Event Handlers ---
     fun pauseWorkout() = viewModelScope.launch { pauseWorkoutSessionUseCase(sessionId, false) }
-
-    fun resumeWorkout() = viewModelScope.launch { resumeWorkoutSessionUseCase(sessionId) }
-
-    fun skipRest() = endRestAndMoveOn()
+    fun resumeWorkout() = viewModelScope.launch {
+        // When resuming, move to the next step if we were in a RESTING state.
+        if (currentSession.value?.status == WorkoutStatus.RESTING) {
+            currentSession.value?.let { moveToNextStep(it) }
+        }
+        resumeWorkoutSessionUseCase(sessionId)
+    }
+    fun skipRest() = resumeWorkout() // Skipping rest is the same as resuming immediately.
 
     fun adjustRestTime(adjustment: Int) {
         _uiState.update {
@@ -315,4 +277,34 @@ class WorkoutSessionViewModel @Inject constructor(
         _uiState.update { it.copy(showFinishWorkoutDialog = false) }
     }
 
+    /**
+     * Clears the list of newly achieved personal records from the state.
+     * This should be called by the UI after the celebration animation has finished.
+     */
+    fun clearNewPrNotifications() {
+        _uiState.update { it.copy(newlyAchievedRecords = emptyList()) }
+    }
+
+    private fun calculateCompletionPercentage(exercises: List<ExecutedExercise>): Float {
+        if (exercises.isEmpty()) return 0f
+
+        val totalPlannedSets = exercises.sumOf { it.plannedSets.size }
+        val totalCompletedSets = exercises.sumOf { exercise ->
+            exercise.executedSets.count { it.isCompleted }
+        }
+
+        return if (totalPlannedSets > 0) {
+            (totalCompletedSets.toFloat() / totalPlannedSets.toFloat()) * 100f
+        } else {
+            0f
+        }
+    }
+
+    private fun calculateTotalVolume(exercises: List<ExecutedExercise>): Float {
+        return exercises.sumOf { exercise ->
+            exercise.executedSets.filter { it.isCompleted }.sumOf { set ->
+                (set.actualWeight * set.actualReps).toDouble()
+            }
+        }.toFloat()
+    }
 }

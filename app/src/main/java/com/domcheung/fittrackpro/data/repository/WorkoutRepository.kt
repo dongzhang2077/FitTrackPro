@@ -218,7 +218,7 @@ interface WorkoutRepository {
         weight: Float,
         reps: Int,
         sessionId: String
-    ): Result<PersonalRecord?>
+    ): Result<List<PersonalRecord>>
 
     /**
      * Get recent personal records (last 30 days)

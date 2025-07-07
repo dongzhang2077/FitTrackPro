@@ -25,6 +25,8 @@ import kotlinx.coroutines.delay
 import com.domcheung.fittrackpro.data.model.*
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.rounded.Check
 
@@ -38,135 +40,74 @@ fun WorkoutSessionScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
 
-    // Initialize session
-//    LaunchedEffect(sessionId) {
-//        viewModel.loadWorkoutSession(sessionId)
-//    }
-
-    // Handle completion
+    // Handle one-time navigation events
     LaunchedEffect(uiState.workoutCompleted) {
         if (uiState.workoutCompleted) {
             onWorkoutComplete()
         }
     }
-
-    // Handle back navigation
     LaunchedEffect(uiState.workoutAbandoned) {
         if (uiState.workoutAbandoned) {
             onNavigateBack()
         }
     }
 
-    // Show error snackbar
-    uiState.errorMessage?.let { errorMessage ->
-        LaunchedEffect(errorMessage) {
-            viewModel.clearError()
-        }
-    }
+    // This is the main layout container for the screen.
+    // A Box allows us to stack layers, like showing the PR notifications over the main content.
+    Box(modifier = Modifier.fillMaxSize()) {
 
-    if (currentSession == null) {
-        LoadingScreen()
-        return
-    }
-
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Header with progress and controls
-        WorkoutSessionHeader(
-            session = currentSession!!,
-            elapsedTime = uiState.elapsedTime,
-            onPauseClick = { viewModel.pauseWorkout() },
-            onResumeClick = { viewModel.resumeWorkout() },
-            onStopClick = { viewModel.showAbandonDialog() },
-            isPaused = currentSession!!.status == WorkoutStatus.PAUSED,
-            isLoading = uiState.isLoading
-        )
-
-        // Main content area
-        AnimatedContent(
-            targetState = uiState.isCurrentlyResting,
-            transitionSpec = {
-                slideInVertically { it } + fadeIn() togetherWith
-                        slideOutVertically { -it } + fadeOut()
-            },
-            label = "main_content"
-        ) { isResting ->
-            if (isResting) {
-                RestScreen(
-                    remainingTime = uiState.restTimeRemaining,
-                    totalRestTime = uiState.totalRestTime,
-                    onSkipRest = { viewModel.skipRest() },
-                    onAdjustTime = { adjustment -> viewModel.adjustRestTime(adjustment) },
-                    modifier = Modifier.weight(1f)
-                )
-            } else {
-                WorkoutContent(
-                    session = currentSession!!,
+        Scaffold { paddingValues ->
+            if (currentSession == null && uiState.isLoading) {
+                // Show a loading screen while the session data is being fetched.
+                LoadingScreen()
+            } else if (currentSession != null) {
+                // Once the session is loaded, display the main content.
+                WorkoutSessionContent(
+                    paddingValues = paddingValues,
+                    session = currentSession!!, // Safe to use !! due to the null check above
                     uiState = uiState,
-                    onShowCompleteDialog = { viewModel.showCompleteDialog() },
-                    currentExerciseIndex = uiState.currentExerciseIndex,
-                    currentSetIndex = uiState.currentSetIndex,
-                    onWeightChange = { weight -> viewModel.updateCurrentWeight(weight) },
-                    onRepsChange = { reps -> viewModel.updateCurrentReps(reps) },
-                    onCompleteSet = { viewModel.completeCurrentSet() },
-                    onSkipSet = { viewModel.skipCurrentSet() },
-                    onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
-                    onAddSet = { viewModel.addSetToCurrentExercise() },
-                    onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
-                    currentWeight = uiState.currentWeight,
-                    currentReps = uiState.currentReps,
-                    isLoading = uiState.isLoading,
-                    modifier = Modifier.weight(1f)
+                    viewModel = viewModel
                 )
             }
         }
 
-        // Bottom action bar
-        WorkoutBottomBar(
-            onCompleteWorkout = { viewModel.showCompleteDialog() },
-            onShowSettings = { viewModel.showSettingsDialog() },
-            isCompleteEnabled = uiState.canCompleteWorkout,
-            isLoading = uiState.isLoading
-        )
-    }
-
-    // Dialogs
-    if (uiState.showAbandonDialog) {
-        AbandonWorkoutDialog(
-            onConfirm = {
-                viewModel.abandonWorkout()
-                // The workoutAbandoned state will now trigger the onNavigateBack lambda
-            },
-            onDismiss = { viewModel.hideAbandonDialog() }
-        )
-    }
-
-    if (uiState.showCompleteDialog) {
-        CompleteWorkoutDialog(
-            session = currentSession!!,
-            onConfirm = { viewModel.completeWorkout() },
-            onDismiss = { viewModel.hideCompleteDialog() }
-        )
-    }
-
-    if (uiState.showSettingsDialog) {
-        WorkoutSettingsDialog(
-            onDismiss = { viewModel.hideSettingsDialog() }
-        )
-    }
-
-    if (uiState.showFinishWorkoutDialog) {
-        FinishWorkoutConfirmationDialog(
-            onConfirm = {
-                // User confirms to finish, call the main complete logic
-                viewModel.completeWorkout()
-            },
-            onDismiss = {
-                // User wants to continue, just hide the dialog
-                viewModel.hideFinishWorkoutDialog()
+        // The PR Notification Overlay is placed in the Box to appear on top of the Scaffold content.
+        PrNotificationOverlay(
+            records = uiState.newlyAchievedRecords,
+            onFinished = {
+                // After the animations are done, clear the event in the ViewModel.
+                viewModel.clearNewPrNotifications()
             }
         )
+
+        // --- All Dialogs are placed at this top level ---
+        if (uiState.showAbandonDialog) {
+            AbandonWorkoutDialog(
+                onConfirm = { viewModel.abandonWorkout() },
+                onDismiss = { viewModel.hideAbandonDialog() }
+            )
+        }
+
+        if (uiState.showCompleteDialog) {
+            CompleteWorkoutDialog(
+                session = currentSession,
+                onConfirm = { viewModel.completeWorkout() },
+                onDismiss = { viewModel.hideCompleteDialog() }
+            )
+        }
+
+        if (uiState.showFinishWorkoutDialog) {
+            FinishWorkoutConfirmationDialog(
+                onConfirm = { viewModel.completeWorkout() },
+                onDismiss = { viewModel.hideFinishWorkoutDialog() }
+            )
+        }
+
+        if (uiState.showSettingsDialog) {
+            WorkoutSettingsDialog(
+                onDismiss = { viewModel.hideSettingsDialog() }
+            )
+        }
     }
 }
 
@@ -813,12 +754,19 @@ private fun AbandonWorkoutDialog(
     )
 }
 
+/**
+ * This is the fixed dialog that now accepts a nullable session
+ * and includes a safety check.
+ */
 @Composable
 private fun CompleteWorkoutDialog(
-    session: WorkoutSession,
+    session: WorkoutSession?, // The parameter type is now nullable
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    // Add a guard clause. If for any reason the session is null, do not show the dialog.
+    if (session == null) return
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Complete Workout") },
@@ -843,8 +791,6 @@ private fun CompleteWorkoutDialog(
         }
     )
 }
-
-
 
 @Composable
 private fun WorkoutSettingsDialog(
@@ -906,4 +852,236 @@ private fun FinishWorkoutConfirmationDialog(
             }
         }
     )
+}
+
+
+/**
+ * An overlay that displays personal record notifications with a staggered animation.
+ */
+@Composable
+fun BoxScope.PrNotificationOverlay(
+    records: List<PersonalRecord>,
+    onFinished: () -> Unit
+) {
+    // Manages which notifications are currently visible on screen.
+    val visibleNotifications = remember { mutableStateListOf<PersonalRecord>() }
+
+    // This effect triggers whenever a new list of records comes from the ViewModel.
+    LaunchedEffect(records) {
+        if (records.isNotEmpty()) {
+            for (record in records) {
+                visibleNotifications.add(record)
+                // Stagger the appearance of each notification.
+                delay(500)
+            }
+            // After all notifications have been shown, wait a bit then clear the event.
+            delay(4000)
+            onFinished()
+        }
+    }
+
+    // This effect manages the auto-dismissal of each individual notification.
+    visibleNotifications.forEach { record ->
+        key(record.id) { // Use key to ensure LaunchedEffect is unique for each record
+            LaunchedEffect(Unit) {
+                // Wait for the display duration.
+                delay(3000)
+                // Remove the record from the visible list, triggering the exit animation.
+                visibleNotifications.remove(record)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .padding(bottom = 90.dp, start = 16.dp, end = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom)
+    ) {
+        visibleNotifications.forEach { record ->
+            // The AnimatedVisibility handles the enter/exit animations.
+            AnimatedVisibility(
+                visible = true, // It's always visible as long as it's in the list
+                enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
+            ) {
+                PrNotificationCard(record = record)
+            }
+        }
+    }
+}
+
+/**
+ * The UI for a single personal record celebration card.
+ */
+@Composable
+private fun PrNotificationCard(record: PersonalRecord) {
+    Card(
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Celebration,
+                contentDescription = "New Record",
+                tint = MaterialTheme.colorScheme.secondary
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "🎉 New Personal Record!",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                // Display a user-friendly description of the record.
+                val recordText = when (record.recordType) {
+                    RecordType.MAX_WEIGHT -> "Max Weight: ${record.weight} kg"
+                    RecordType.MAX_REPS -> "Max Reps: ${record.reps}"
+                    RecordType.MAX_VOLUME -> "Max Volume: ${record.volume} kg"
+                    RecordType.MAX_ONE_REP_MAX -> "Max 1RM: ${record.oneRepMax} kg"
+                }
+                Text(
+                    text = "${record.exerciseName} - $recordText",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    }
+}
+// Replace your existing WorkoutSessionContent function with this complete version.
+
+@Composable
+private fun WorkoutSessionContent(
+    paddingValues: PaddingValues,
+    session: WorkoutSession,
+    uiState: WorkoutSessionState,
+    viewModel: WorkoutSessionViewModel
+) {
+    // A Box is used to allow the RestScreen to overlay on top of the main content.
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
+        // --- Main Content (The scrollable list of exercises) ---
+        // This part is now always present in the background.
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Item 1: The header with timers and progress
+            item {
+                WorkoutSessionHeader(
+                    session = session,
+                    elapsedTime = uiState.elapsedTime,
+                    onPauseClick = { viewModel.pauseWorkout() },
+                    onResumeClick = { viewModel.resumeWorkout() },
+                    onStopClick = { viewModel.showAbandonDialog() },
+                    isPaused = session.status == WorkoutStatus.PAUSED,
+                    isLoading = uiState.isLoading
+                )
+            }
+
+            // Item 2: The current exercise input card
+            item {
+                session.exercises.getOrNull(uiState.currentExerciseIndex)?.let { currentExercise ->
+                    CurrentExerciseCard(
+                        exercise = currentExercise,
+                        currentSetIndex = uiState.currentSetIndex,
+                        currentWeight = uiState.currentWeight,
+                        currentReps = uiState.currentReps,
+                        onWeightChange = { weight -> viewModel.updateCurrentWeight(weight) },
+                        onRepsChange = { reps -> viewModel.updateCurrentReps(reps) },
+                        onCompleteSet = { viewModel.completeCurrentSet() },
+                        onSkipSet = { viewModel.skipCurrentSet() },
+                        onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
+                        onAddSet = { viewModel.addSetToCurrentExercise() },
+                        onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
+                        isLoading = uiState.isLoading
+                    )
+                }
+            }
+
+            // Item 3: The workout overview section title
+            item {
+                Text(
+                    text = "📋 Workout Overview",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                )
+            }
+
+            // Items 4...N: The list of all exercises in the overview
+            itemsIndexed(session.exercises) { index, exercise ->
+                ExerciseOverviewCard(
+                    exercise = exercise,
+                    isCurrentExercise = index == uiState.currentExerciseIndex,
+                    exerciseNumber = index + 1
+                )
+            }
+
+            // Final Item: The conditional "All Sets Completed" confirmation button
+            item {
+                AnimatedVisibility(
+                    visible = uiState.isAllSetsCompleted,
+                    enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
+                            slideInVertically(animationSpec = tween(durationMillis = 500)) { it / 2 }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "🔥 All Sets Completed!",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        // The big green checkmark button
+                        FloatingActionButton(
+                            onClick = { viewModel.showCompleteDialog() },
+                            containerColor = Color(0xFF2E7D32), // A nice green color
+                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Check,
+                                contentDescription = "Complete Workout",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- The Rest Screen as a full-screen overlay ---
+        // This will appear on top of the LazyColumn when isCurrentlyResting is true.
+        AnimatedVisibility(
+            visible = uiState.isCurrentlyResting,
+            enter = fadeIn(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300))
+        ) {
+            RestScreen(
+                remainingTime = uiState.restTimeRemaining,
+                totalRestTime = uiState.totalRestTime,
+                onSkipRest = { viewModel.skipRest() },
+                onAdjustTime = { adjustment -> viewModel.adjustRestTime(adjustment) },
+                // Add a background to cover the content behind it
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
+                    .clickable(enabled = false, onClick = {}) // Block clicks on content behind
+            )
+        }
+    }
 }

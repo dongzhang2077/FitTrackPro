@@ -208,111 +208,6 @@ class GetActiveWorkoutSessionUseCase @Inject constructor(
     }
 }
 
-/**
- * Use case for updating workout session progress
- * Handles real-time workout progress updates
- */
-@Singleton
-class UpdateWorkoutProgressUseCase @Inject constructor(
-    private val repository: WorkoutRepository
-) {
-    suspend operator fun invoke(
-        sessionId: String,
-        exerciseId: Int,
-        setNumber: Int,
-        weight: Float,
-        reps: Int,
-        userId: String
-    ): Result<PersonalRecord?> {
-        // Get current session
-        val session = repository.getWorkoutSessionById(sessionId)
-            ?: return Result.failure(Exception("Workout session not found"))
-
-        // Update session progress
-        val updatedSession = updateSessionProgress(session, exerciseId, setNumber, weight, reps)
-        val updateResult = repository.updateWorkoutSession(updatedSession)
-
-        if (updateResult.isFailure) {
-            return Result.failure(updateResult.exceptionOrNull() ?: Exception("Failed to update session"))
-        }
-
-        // Check for personal records
-        return repository.checkAndCreatePersonalRecord(userId, exerciseId, weight, reps, sessionId)
-    }
-
-    private fun updateSessionProgress(
-        session: WorkoutSession,
-        exerciseId: Int,
-        setNumber: Int,
-        weight: Float,
-        reps: Int
-    ): WorkoutSession {
-        val updatedExercises = session.exercises.map { exercise ->
-            if (exercise.exerciseId == exerciseId) {
-                val updatedSets = exercise.executedSets.toMutableList()
-                val setIndex = updatedSets.indexOfFirst { it.setNumber == setNumber }
-
-                if (setIndex >= 0) {
-                    updatedSets[setIndex] = updatedSets[setIndex].copy(
-                        actualWeight = weight,
-                        actualReps = reps,
-                        isCompleted = true,
-                        completedAt = System.currentTimeMillis()
-                    )
-                } else {
-                    // Add new set if not exists
-                    updatedSets.add(
-                        ExecutedSet(
-                            setNumber = setNumber,
-                            plannedWeight = weight,
-                            plannedReps = reps,
-                            actualWeight = weight,
-                            actualReps = reps,
-                            isCompleted = true,
-                            completedAt = System.currentTimeMillis()
-                        )
-                    )
-                }
-
-                exercise.copy(executedSets = updatedSets)
-            } else {
-                exercise
-            }
-        }
-
-        val completionPercentage = calculateCompletionPercentage(updatedExercises)
-        val totalVolume = calculateTotalVolume(updatedExercises)
-
-        return session.copy(
-            exercises = updatedExercises,
-            completionPercentage = completionPercentage,
-            totalVolume = totalVolume
-        )
-    }
-
-    private fun calculateCompletionPercentage(exercises: List<ExecutedExercise>): Float {
-        if (exercises.isEmpty()) return 0f
-
-        val totalPlannedSets = exercises.sumOf { it.plannedSets.size }
-        val totalCompletedSets = exercises.sumOf { exercise ->
-            exercise.executedSets.count { it.isCompleted }
-        }
-
-        return if (totalPlannedSets > 0) {
-            (totalCompletedSets.toFloat() / totalPlannedSets.toFloat()) * 100f
-        } else {
-            0f
-        }
-    }
-
-    private fun calculateTotalVolume(exercises: List<ExecutedExercise>): Float {
-        return exercises.sumOf { exercise ->
-            exercise.executedSets.filter { it.isCompleted }.sumOf { set ->
-                (set.actualWeight * set.actualReps).toDouble()
-            }
-        }.toFloat()
-    }
-}
 
 /**
  * Use case for completing workout sessions
@@ -463,18 +358,14 @@ class UpdateWorkoutSessionUseCase @Inject constructor(
     }
 }
 
+
 @Singleton
 class CheckAndCreatePersonalRecordUseCase @Inject constructor(
     private val repository: WorkoutRepository
 ) {
     /**
-     * Invokes the use case to check if a new personal record was set and creates it if so.
-     * @param userId The ID of the current user.
-     * @param exerciseId The ID of the exercise performed.
-     * @param weight The weight lifted.
-     * @param reps The repetitions performed.
-     * @param sessionId The ID of the current workout session.
-     * @return A Result containing the new PersonalRecord if one was created, or null otherwise.
+     * Invokes the use case to check for and create any new personal records for a given set.
+     * @return A Result containing a List of new PersonalRecords. The list will be empty if no new records were set.
      */
     suspend operator fun invoke(
         userId: String,
@@ -482,10 +373,10 @@ class CheckAndCreatePersonalRecordUseCase @Inject constructor(
         weight: Float,
         reps: Int,
         sessionId: String
-    ): Result<PersonalRecord?> {
+    ): Result<List<PersonalRecord>> { // <<< This return type is now corrected to match the repository
         // Basic validation: A PR can only be set with positive weight and reps.
         if (weight <= 0 || reps <= 0) {
-            return Result.success(null) // Not a valid performance to check for a PR.
+            return Result.success(emptyList()) // Return an empty list for invalid performance.
         }
         return repository.checkAndCreatePersonalRecord(
             userId = userId,

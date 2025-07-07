@@ -362,7 +362,7 @@ class WorkoutRepositoryImpl @Inject constructor(
         weight: Float,
         reps: Int,
         sessionId: String
-    ): Result<PersonalRecord?> {
+    ): Result<List<PersonalRecord>> { // Return type is now a List
         return try {
             val exercise = exerciseDao.getExerciseById(exerciseId)
                 ?: return Result.failure(Exception("Exercise not found"))
@@ -370,53 +370,34 @@ class WorkoutRepositoryImpl @Inject constructor(
             val volume = weight * reps
             val oneRepMax = calculateOneRepMax(weight, reps)
 
-            // Check each record type
             val newRecords = mutableListOf<PersonalRecord>()
 
-            // Check weight record
+            // Check for MAX_WEIGHT record
             if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_WEIGHT", weight, 0, 0f, 0f)) {
-                newRecords.add(createPersonalRecord(
-                    userId, exerciseId, exercise.name, RecordType.MAX_WEIGHT,
-                    weight, reps, oneRepMax, volume, sessionId
-                ))
+                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_WEIGHT, weight, reps, oneRepMax, volume, sessionId))
             }
-
-            // Check reps record
+            // Check for MAX_REPS record
             if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_REPS", 0f, reps, 0f, 0f)) {
-                newRecords.add(createPersonalRecord(
-                    userId, exerciseId, exercise.name, RecordType.MAX_REPS,
-                    weight, reps, oneRepMax, volume, sessionId
-                ))
+                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_REPS, weight, reps, oneRepMax, volume, sessionId))
             }
-
-            // Check volume record
+            // Check for MAX_VOLUME record
             if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_VOLUME", 0f, 0, volume, 0f)) {
-                newRecords.add(createPersonalRecord(
-                    userId, exerciseId, exercise.name, RecordType.MAX_VOLUME,
-                    weight, reps, oneRepMax, volume, sessionId
-                ))
+                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_VOLUME, weight, reps, oneRepMax, volume, sessionId))
             }
-
-            // Check 1RM record
+            // Check for MAX_ONE_REP_MAX record
             if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_ONE_REP_MAX", 0f, 0, 0f, oneRepMax)) {
-                newRecords.add(createPersonalRecord(
-                    userId, exerciseId, exercise.name, RecordType.MAX_ONE_REP_MAX,
-                    weight, reps, oneRepMax, volume, sessionId
-                ))
+                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_ONE_REP_MAX, weight, reps, oneRepMax, volume, sessionId))
             }
 
-            // Insert new records
             if (newRecords.isNotEmpty()) {
                 personalRecordDao.insertPersonalRecords(newRecords)
-                Result.success(newRecords.firstOrNull())
-            } else {
-                Result.success(null)
             }
+            // Always return the list of new records (which might be empty)
+            Result.success(newRecords)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
-
     override fun getRecentPersonalRecords(userId: String): Flow<List<PersonalRecord>> {
         val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24L * 60L * 60L * 1000L)
         return personalRecordDao.getRecentPersonalRecords(userId, thirtyDaysAgo)
@@ -525,8 +506,7 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     private fun createPersonalRecord(
         userId: String,
-        exerciseId: Int,
-        exerciseName: String,
+        exercise: Exercise, // Pass the whole Exercise object
         recordType: RecordType,
         weight: Float,
         reps: Int,
@@ -536,8 +516,8 @@ class WorkoutRepositoryImpl @Inject constructor(
     ): PersonalRecord {
         return PersonalRecord(
             id = UUID.randomUUID().toString(),
-            exerciseId = exerciseId,
-            exerciseName = exerciseName,
+            exerciseId = exercise.id, // Use exercise.id
+            exerciseName = exercise.name, // Use exercise.name
             userId = userId,
             recordType = recordType,
             weight = weight,
