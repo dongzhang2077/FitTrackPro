@@ -24,6 +24,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import com.domcheung.fittrackpro.data.model.*
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.rounded.Check
 
 @Composable
 fun WorkoutSessionScreen(
@@ -100,6 +103,8 @@ fun WorkoutSessionScreen(
             } else {
                 WorkoutContent(
                     session = currentSession!!,
+                    uiState = uiState,
+                    onShowCompleteDialog = { viewModel.showCompleteDialog() },
                     currentExerciseIndex = uiState.currentExerciseIndex,
                     currentSetIndex = uiState.currentSetIndex,
                     onWeightChange = { weight -> viewModel.updateCurrentWeight(weight) },
@@ -148,6 +153,19 @@ fun WorkoutSessionScreen(
     if (uiState.showSettingsDialog) {
         WorkoutSettingsDialog(
             onDismiss = { viewModel.hideSettingsDialog() }
+        )
+    }
+
+    if (uiState.showFinishWorkoutDialog) {
+        FinishWorkoutConfirmationDialog(
+            onConfirm = {
+                // User confirms to finish, call the main complete logic
+                viewModel.completeWorkout()
+            },
+            onDismiss = {
+                // User wants to continue, just hide the dialog
+                viewModel.hideFinishWorkoutDialog()
+            }
         )
     }
 }
@@ -286,6 +304,8 @@ private fun WorkoutContent(
     onRemoveSet: () -> Unit,
     currentWeight: Float,
     currentReps: Int,
+    uiState: WorkoutSessionState,
+    onShowCompleteDialog: () -> Unit,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -332,6 +352,41 @@ private fun WorkoutContent(
                 isCurrentExercise = index == currentExerciseIndex,
                 exerciseNumber = index + 1
             )
+        }
+
+        item {
+            // This button will only appear when all sets are completed.
+            AnimatedVisibility(
+                visible = uiState.isAllSetsCompleted,
+                enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
+                        slideInVertically(animationSpec = tween(durationMillis = 500)) { it / 2 }
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🔥 All Sets Completed!",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    // The big green checkmark button
+                    FloatingActionButton(
+                        onClick = onShowCompleteDialog,
+                        containerColor = Color(0xFF2E7D32), // A nice green color
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
+                        shape = MaterialTheme.shapes.large,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Complete Workout",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
         }
 
         // Bottom spacing
@@ -789,6 +844,8 @@ private fun CompleteWorkoutDialog(
     )
 }
 
+
+
 @Composable
 private fun WorkoutSettingsDialog(
     onDismiss: () -> Unit
@@ -825,4 +882,28 @@ private fun formatTime(timeInMillis: Long): String {
     } else {
         String.format("%d:%02d", minutes, seconds)
     }
+}
+
+@Composable
+private fun FinishWorkoutConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Workout Complete!") },
+        text = {
+            Text("Congratulations! You've completed all planned exercises. Finish workout?")
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Finish Workout")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Continue Training")
+            }
+        }
+    )
 }

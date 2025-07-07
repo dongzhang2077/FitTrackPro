@@ -11,6 +11,7 @@ data class WorkoutSessionState(
     // Session completion states
     val workoutCompleted: Boolean = false,
     val workoutAbandoned: Boolean = false,
+    val isAllSetsCompleted: Boolean = false,
 
     // Timers
     val elapsedTime: Long = 0L,
@@ -29,7 +30,8 @@ data class WorkoutSessionState(
     val showAbandonDialog: Boolean = false,
     val showCompleteDialog: Boolean = false,
     val showSettingsDialog: Boolean = false,
-    val showReplaceExerciseDialog: Boolean = false
+    val showReplaceExerciseDialog: Boolean = false,
+    val showFinishWorkoutDialog: Boolean = false
 ) {
     val canCompleteWorkout: Boolean
         get() = elapsedTime > 0

@@ -110,27 +110,44 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Completes the current set. This is the core function for making progress.
-     * It saves the user's performance for the set, updates the database,
-     * and then starts the rest timer before moving to the next step.
+     * Completes the current set, saves data, and then decides the next step.
+     * If it's the final set of the final exercise, it prompts the user to finish the workout.
+     * Otherwise, it starts the rest timer.
+     */
+    /**
+     * Completes the current set, saves data, and then decides the next step.
+     * If it's the final set of the final exercise, it updates the state to show the
+     * final completion UI elements and prompts the user to finish the workout.
+     * Otherwise, it starts the rest timer.
      */
     fun completeCurrentSet() = viewModelScope.launch {
         val session = currentSession.value ?: return@launch
         val state = _uiState.value
 
-        // Step 1: Create an updated session object with the new set data.
-        val updatedSession = updateSetInData(session, isSkipped = false)
+        // Check if this is the last set of the last exercise BEFORE updating data
+        val currentExercise = session.exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
+        val isLastSet = state.currentSetIndex >= currentExercise.plannedSets.size - 1
+        val isLastExercise = state.currentExerciseIndex >= session.exercises.size - 1
 
-        // Step 2: Save the updated session to the database.
+        // Save the data regardless
+        val updatedSession = updateSetInData(session, isSkipped = false)
         updateWorkoutSessionUseCase(updatedSession)
 
-        // Step 3 (for next implementation): Check for personal records.
-        // checkAndCreatePersonalRecordUseCase(...)
-
-        // Step 4: Start the rest timer.
-        val currentExercise = updatedSession.exercises.getOrNull(state.currentExerciseIndex)
-        val restTime = currentExercise?.restBetweenSets?.toLong()?.times(1000) ?: 90000L
-        _uiState.update { it.copy(isCurrentlyResting = true, restTimeRemaining = restTime, totalRestTime = restTime) }
+        if (isLastSet && isLastExercise) {
+            // --- THIS IS THE NEW LOGIC ---
+            // It's the very end of the planned workout.
+            // Update state to show the final confirmation dialog AND the final complete button.
+            _uiState.update { it.copy(
+                isAllSetsCompleted = true,
+                showFinishWorkoutDialog = true
+            )}
+        } else {
+            // It's not the end yet, start the rest timer as usual.
+            val restTime = currentExercise.restBetweenSets.toLong() * 1000
+            _uiState.update { it.copy(isCurrentlyResting = true, restTimeRemaining = restTime, totalRestTime = restTime) }
+            // Also pause the main timer while resting
+            pauseWorkout()
+        }
     }
 
     /**
@@ -291,4 +308,11 @@ class WorkoutSessionViewModel @Inject constructor(
     fun hideSettingsDialog() { _uiState.update { it.copy(showSettingsDialog = false) } }
     fun showReplaceExerciseDialog() { _uiState.update { it.copy(showReplaceExerciseDialog = true) } }
     fun hideReplaceExerciseDialog() { _uiState.update { it.copy(showReplaceExerciseDialog = false) } }
+    /**
+     * Hides the dialog that asks the user to confirm finishing the workout.
+     */
+    fun hideFinishWorkoutDialog() {
+        _uiState.update { it.copy(showFinishWorkoutDialog = false) }
+    }
+
 }
