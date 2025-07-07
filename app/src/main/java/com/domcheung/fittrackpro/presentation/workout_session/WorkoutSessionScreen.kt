@@ -53,41 +53,56 @@ fun WorkoutSessionScreen(
     }
 
     // This is the main layout container for the screen.
-    // A Box allows us to stack layers, like showing the PR notifications over the main content.
+    // A Box allows us to stack layers correctly.
     Box(modifier = Modifier.fillMaxSize()) {
 
+        // --- Layer 1: The main content ---
         Scaffold { paddingValues ->
             if (currentSession == null && uiState.isLoading) {
-                // Show a loading screen while the session data is being fetched.
                 LoadingScreen()
             } else if (currentSession != null) {
-                // Once the session is loaded, display the main content.
+                // The main content no longer needs to worry about the rest screen.
                 WorkoutSessionContent(
                     paddingValues = paddingValues,
-                    session = currentSession!!, // Safe to use !! due to the null check above
+                    session = currentSession!!,
                     uiState = uiState,
                     viewModel = viewModel
                 )
             }
         }
 
-        // The PR Notification Overlay is placed in the Box to appear on top of the Scaffold content.
+        // --- Layer 2: The Rest Screen Overlay ---
+        // It is now at the same level as the PR notifications, but placed before it,
+        // so it will appear underneath the PR cards.
+        AnimatedVisibility(
+            visible = uiState.isCurrentlyResting,
+            enter = fadeIn(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300))
+        ) {
+            RestScreen(
+                remainingTime = uiState.restTimeRemaining,
+                totalRestTime = uiState.totalRestTime,
+                onSkipRest = { viewModel.skipRest() },
+                onAdjustTime = { adjustment -> viewModel.adjustRestTime(adjustment) }
+            )
+        }
+
+        // --- Layer 3: The PR Notification Overlay ---
+        // This is now guaranteed to be on top of the rest screen.
         PrNotificationOverlay(
             records = uiState.newlyAchievedRecords,
             onFinished = {
-                // After the animations are done, clear the event in the ViewModel.
                 viewModel.clearNewPrNotifications()
             }
         )
 
-        // --- All Dialogs are placed at this top level ---
+        // --- Topmost Layer: All Dialogs ---
         if (uiState.showAbandonDialog) {
             AbandonWorkoutDialog(
                 onConfirm = { viewModel.abandonWorkout() },
                 onDismiss = { viewModel.hideAbandonDialog() }
             )
         }
-
         if (uiState.showCompleteDialog) {
             CompleteWorkoutDialog(
                 session = currentSession,
@@ -95,14 +110,12 @@ fun WorkoutSessionScreen(
                 onDismiss = { viewModel.hideCompleteDialog() }
             )
         }
-
         if (uiState.showFinishWorkoutDialog) {
             FinishWorkoutConfirmationDialog(
                 onConfirm = { viewModel.completeWorkout() },
                 onDismiss = { viewModel.hideFinishWorkoutDialog() }
             )
         }
-
         if (uiState.showSettingsDialog) {
             WorkoutSettingsDialog(
                 onDismiss = { viewModel.hideSettingsDialog() }
@@ -952,7 +965,7 @@ private fun PrNotificationCard(record: PersonalRecord) {
         }
     }
 }
-// Replace your existing WorkoutSessionContent function with this complete version.
+
 
 @Composable
 private fun WorkoutSessionContent(
@@ -961,52 +974,45 @@ private fun WorkoutSessionContent(
     uiState: WorkoutSessionState,
     viewModel: WorkoutSessionViewModel
 ) {
-    // A Box is used to allow the RestScreen to overlay on top of the main content.
-    Box(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues)
+            .padding(paddingValues) // Apply padding from Scaffold
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // --- Main Content (The scrollable list of exercises) ---
-        // This part is now always present in the background.
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Item 1: The header with timers and progress
-            item {
-                WorkoutSessionHeader(
-                    session = session,
-                    elapsedTime = uiState.elapsedTime,
-                    onPauseClick = { viewModel.pauseWorkout() },
-                    onResumeClick = { viewModel.resumeWorkout() },
-                    onStopClick = { viewModel.showAbandonDialog() },
-                    isPaused = session.status == WorkoutStatus.PAUSED,
+        // Item 1: The header
+        item {
+            WorkoutSessionHeader(
+                session = session,
+                elapsedTime = uiState.elapsedTime,
+                onPauseClick = { viewModel.pauseWorkout() },
+                onResumeClick = { viewModel.resumeWorkout() },
+                onStopClick = { viewModel.showAbandonDialog() },
+                isPaused = session.status == WorkoutStatus.PAUSED,
+                isLoading = uiState.isLoading
+            )
+        }
+
+        // Item 2: The current exercise card (no AnimatedContent wrapper needed anymore)
+        item {
+            session.exercises.getOrNull(uiState.currentExerciseIndex)?.let { currentExercise ->
+                CurrentExerciseCard(
+                    exercise = currentExercise,
+                    currentSetIndex = uiState.currentSetIndex,
+                    currentWeight = uiState.currentWeight,
+                    currentReps = uiState.currentReps,
+                    onWeightChange = { weight -> viewModel.updateCurrentWeight(weight) },
+                    onRepsChange = { reps -> viewModel.updateCurrentReps(reps) },
+                    onCompleteSet = { viewModel.completeCurrentSet() },
+                    onSkipSet = { viewModel.skipCurrentSet() },
+                    onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
+                    onAddSet = { viewModel.addSetToCurrentExercise() },
+                    onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
                     isLoading = uiState.isLoading
                 )
             }
-
-            // Item 2: The current exercise input card
-            item {
-                session.exercises.getOrNull(uiState.currentExerciseIndex)?.let { currentExercise ->
-                    CurrentExerciseCard(
-                        exercise = currentExercise,
-                        currentSetIndex = uiState.currentSetIndex,
-                        currentWeight = uiState.currentWeight,
-                        currentReps = uiState.currentReps,
-                        onWeightChange = { weight -> viewModel.updateCurrentWeight(weight) },
-                        onRepsChange = { reps -> viewModel.updateCurrentReps(reps) },
-                        onCompleteSet = { viewModel.completeCurrentSet() },
-                        onSkipSet = { viewModel.skipCurrentSet() },
-                        onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
-                        onAddSet = { viewModel.addSetToCurrentExercise() },
-                        onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
-                        isLoading = uiState.isLoading
-                    )
-                }
-            }
+        }
 
             // Item 3: The workout overview section title
             item {
@@ -1084,4 +1090,4 @@ private fun WorkoutSessionContent(
             )
         }
     }
-}
+

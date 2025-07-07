@@ -362,7 +362,9 @@ class WorkoutRepositoryImpl @Inject constructor(
         weight: Float,
         reps: Int,
         sessionId: String
-    ): Result<List<PersonalRecord>> { // Return type is now a List
+    ): Result<List<PersonalRecord>> {
+        println("PR_DEBUG: --- Starting PR Check for exerciseId: $exerciseId ---")
+        println("PR_DEBUG: Values: weight=$weight, reps=$reps")
         return try {
             val exercise = exerciseDao.getExerciseById(exerciseId)
                 ?: return Result.failure(Exception("Exercise not found"))
@@ -373,31 +375,48 @@ class WorkoutRepositoryImpl @Inject constructor(
             val newRecords = mutableListOf<PersonalRecord>()
 
             // Check for MAX_WEIGHT record
-            if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_WEIGHT", weight, 0, 0f, 0f)) {
+            val isNewWeightRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_WEIGHT", weight, 0, 0f, 0f)
+            println("PR_DEBUG: Is new MAX_WEIGHT record? $isNewWeightRecord")
+            if (isNewWeightRecord) {
                 newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_WEIGHT, weight, reps, oneRepMax, volume, sessionId))
             }
+
             // Check for MAX_REPS record
-            if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_REPS", 0f, reps, 0f, 0f)) {
+            val isNewRepsRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_REPS", 0f, reps, 0f, 0f)
+            println("PR_DEBUG: Is new MAX_REPS record? $isNewRepsRecord")
+            if (isNewRepsRecord) {
                 newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_REPS, weight, reps, oneRepMax, volume, sessionId))
             }
+
             // Check for MAX_VOLUME record
-            if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_VOLUME", 0f, 0, volume, 0f)) {
+            val isNewVolumeRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_VOLUME", 0f, 0, volume, 0f)
+            println("PR_DEBUG: Is new MAX_VOLUME record? $isNewVolumeRecord")
+            if (isNewVolumeRecord) {
                 newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_VOLUME, weight, reps, oneRepMax, volume, sessionId))
             }
+
             // Check for MAX_ONE_REP_MAX record
-            if (personalRecordDao.isNewRecord(userId, exerciseId, "MAX_ONE_REP_MAX", 0f, 0, 0f, oneRepMax)) {
+            val isNew1RMRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_ONE_REP_MAX", 0f, 0, 0f, oneRepMax)
+            println("PR_DEBUG: Is new MAX_ONE_REP_MAX record? $isNew1RMRecord")
+            if (isNew1RMRecord) {
                 newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_ONE_REP_MAX, weight, reps, oneRepMax, volume, sessionId))
             }
 
             if (newRecords.isNotEmpty()) {
+                println("PR_DEBUG: Found ${newRecords.size} new records. Inserting into DB.")
                 personalRecordDao.insertPersonalRecords(newRecords)
+            } else {
+                println("PR_DEBUG: No new records were set.")
             }
-            // Always return the list of new records (which might be empty)
+            println("PR_DEBUG: --- PR Check Finished ---")
             Result.success(newRecords)
         } catch (e: Exception) {
+            println("PR_DEBUG: Error during PR check: ${e.message}")
             Result.failure(e)
         }
     }
+
+
     override fun getRecentPersonalRecords(userId: String): Flow<List<PersonalRecord>> {
         val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24L * 60L * 60L * 1000L)
         return personalRecordDao.getRecentPersonalRecords(userId, thirtyDaysAgo)

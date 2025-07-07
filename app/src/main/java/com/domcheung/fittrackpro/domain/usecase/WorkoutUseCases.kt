@@ -387,3 +387,17 @@ class CheckAndCreatePersonalRecordUseCase @Inject constructor(
         )
     }
 }
+
+
+/**
+ * Use case to sync exercises from the remote API or create sample ones if needed.
+ * This should be called on app startup.
+ */
+@Singleton
+class SyncExercisesUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(): Result<Unit> {
+        return repository.syncExercisesFromApi()
+    }
+}

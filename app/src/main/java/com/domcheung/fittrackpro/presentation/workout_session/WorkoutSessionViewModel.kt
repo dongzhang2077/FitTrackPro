@@ -113,20 +113,29 @@ class WorkoutSessionViewModel @Inject constructor(
         val userId = session.userId
         val currentExercise = session.exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
 
+        // Step 1: Save data
         val updatedSession = updateSetInData(session, isSkipped = false)
         updateWorkoutSessionUseCase(updatedSession)
+        println("PR_DEBUG: Set data saved for exerciseId: ${currentExercise.exerciseId}")
 
-        // Check for PRs
-        checkAndCreatePersonalRecordUseCase(
+        // Step 2: Check for PRs
+        val prResult = checkAndCreatePersonalRecordUseCase(
             userId = userId,
             exerciseId = currentExercise.exerciseId,
             weight = state.currentWeight,
             reps = state.currentReps,
             sessionId = session.id
-        ).getOrNull()?.let { newRecords ->
-            if (newRecords.isNotEmpty()) {
+        )
+        if (prResult.isSuccess) {
+            val newRecords = prResult.getOrNull()
+            if (!newRecords.isNullOrEmpty()) {
+                println("PR_DEBUG: ViewModel received ${newRecords.size} new records. Updating UI state.")
                 _uiState.update { it.copy(newlyAchievedRecords = newRecords) }
+            } else {
+                println("PR_DEBUG: ViewModel received 0 new records.")
             }
+        } else {
+            println("PR_DEBUG: ViewModel received PR check failure: ${prResult.exceptionOrNull()?.message}")
         }
 
         val isLastSet = state.currentSetIndex >= currentExercise.plannedSets.size - 1

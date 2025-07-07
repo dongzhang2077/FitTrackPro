@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.domcheung.fittrackpro.domain.usecase.SyncExercisesUseCase
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,7 +23,8 @@ data class SplashUiState(
 
 @HiltViewModel
 class SplashViewModel @Inject constructor(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val syncExercisesUseCase: SyncExercisesUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SplashUiState())
@@ -32,6 +34,11 @@ class SplashViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 println("DEBUG: Checking login state...")
+
+                // --- NEW LOGIC: Seed exercises first ---
+                // Ensure sample exercises exist before proceeding.
+                syncExercisesUseCase()
+                println("DEBUG: Exercise sync/seed completed.")
 
                 // Use full login state check
                 val isLoggedIn = authRepository.checkInitialLoginState()
