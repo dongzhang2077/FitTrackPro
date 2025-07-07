@@ -257,12 +257,103 @@ class WorkoutSessionViewModel @Inject constructor(
         _uiState.update { it.copy(currentReps = reps) }
     }
 
-    fun addSetToCurrentExercise() {
-        // TODO: Implement logic to add a new PlannedSet to the current exercise
+    /**
+     * Adds a new set to the current exercise.
+     * The new set's details (weight, reps) are copied from the last existing set.
+     */
+    fun addSetToCurrentExercise() = viewModelScope.launch {
+        val session = currentSession.value ?: return@launch
+        val state = _uiState.value
+
+        val exercises = session.exercises.toMutableList()
+        val currentExercise = exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
+
+        val plannedSets = currentExercise.plannedSets.toMutableList()
+        val lastSet = plannedSets.lastOrNull() ?: return@launch // Cannot add a set if none exist
+
+        // Create a new set by copying the last one
+        val newSet = lastSet.copy(setNumber = plannedSets.size + 1)
+        plannedSets.add(newSet)
+
+        // Update the exercise with the new list of planned sets
+        exercises[state.currentExerciseIndex] = currentExercise.copy(plannedSets = plannedSets)
+
+        // Create the final updated session object
+        val updatedSession = session.copy(exercises = exercises)
+
+        // Save the changes to the database
+        updateWorkoutSessionUseCase(updatedSession)
+    }
+    /**
+     * TODO: Implement this function in a future step.
+     * Adds a new exercise to the current workout session.
+     */
+    fun addExerciseToCurrentSession(/*... parameters for new exercise ...*/) {
+        // --- FUTURE LOGIC REMINDER ---
+        // When a new exercise is added, we must ensure the "all sets completed"
+        // flag is reset, so the final complete button disappears again.
+        // _uiState.update { it.copy(isAllSetsCompleted = false) }
+        // ---
     }
 
-    fun removeSetFromCurrentExercise() {
-        // TODO: Implement logic to remove the last PlannedSet from the current exercise
+    /**
+     * Removes a set from the current exercise with intelligent edge case handling.
+     * - If it's the last set of the last exercise, it triggers the abandon flow.
+     * - If it's the last set of a non-final exercise, it removes the whole exercise and moves to the next.
+     * - Otherwise, it just removes the last set.
+     */
+    fun removeSetFromCurrentExercise() = viewModelScope.launch {
+        val session = currentSession.value ?: return@launch
+        val state = _uiState.value
+
+        val exercises = session.exercises.toMutableList()
+        val currentExercise = exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
+        val plannedSets = currentExercise.plannedSets.toMutableList()
+
+        val isLastExerciseInPlan = state.currentExerciseIndex >= exercises.size - 1
+        val isOnlyOneSetInExercise = plannedSets.size == 1
+
+        // --- NEW LOGIC: Handle all edge cases ---
+
+        // Case 1: Trying to remove the very last set of the entire workout plan.
+        if (isLastExerciseInPlan && isOnlyOneSetInExercise) {
+            // This action is equivalent to abandoning the workout.
+            showAbandonDialog()
+            return@launch
+        }
+
+        // Case 2: Trying to remove the last set of an exercise that is NOT the last in the plan.
+        if (isOnlyOneSetInExercise) {
+            // This action means the user wants to skip this entire exercise.
+            // Remove the current exercise from the list.
+            exercises.removeAt(state.currentExerciseIndex)
+
+            // The exercise index does not need to be changed, as the next exercise
+            // will automatically shift into the current index.
+            // We just need to update the session with the modified exercises list.
+            val updatedSession = session.copy(exercises = exercises)
+            updateWorkoutSessionUseCase(updatedSession)
+
+            // Also, reset the set index and pre-fill inputs for the new current exercise.
+            val newCurrentExercise = updatedSession.exercises.getOrNull(state.currentExerciseIndex)
+            if (newCurrentExercise != null) {
+                _uiState.update {
+                    it.copy(
+                        currentSetIndex = 0,
+                        currentWeight = newCurrentExercise.plannedSets.first().targetWeight,
+                        currentReps = newCurrentExercise.plannedSets.first().targetReps
+                    )
+                }
+            }
+            return@launch
+        }
+
+        // --- Standard Case ---
+        // The exercise has more than one set, so we just remove the last one.
+        plannedSets.removeAt(plannedSets.lastIndex)
+        exercises[state.currentExerciseIndex] = currentExercise.copy(plannedSets = plannedSets)
+        val updatedSession = session.copy(exercises = exercises)
+        updateWorkoutSessionUseCase(updatedSession)
     }
 
     fun clearError() {

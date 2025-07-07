@@ -420,7 +420,7 @@ private fun CurrentExerciseCard(
                 Row {
                     IconButton(
                         onClick = onRemoveSet,
-                        enabled = exercise.plannedSets.size > 1
+                        enabled = !isLoading
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Remove set")
                     }
