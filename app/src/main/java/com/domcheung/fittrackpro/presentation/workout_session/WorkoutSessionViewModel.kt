@@ -9,10 +9,10 @@ import com.domcheung.fittrackpro.data.model.WorkoutStatus
 import com.domcheung.fittrackpro.domain.usecase.*
 import com.domcheung.fittrackpro.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlinx.coroutines.delay
 
 /**
  * ViewModel for the WorkoutSessionScreen.
@@ -30,7 +30,8 @@ class WorkoutSessionViewModel @Inject constructor(
     private val completeWorkoutSessionUseCase: CompleteWorkoutSessionUseCase,
     private val pauseWorkoutSessionUseCase: PauseWorkoutSessionUseCase,
     private val resumeWorkoutSessionUseCase: ResumeWorkoutSessionUseCase,
-    private val abandonWorkoutSessionUseCase: AbandonWorkoutSessionUseCase
+    private val abandonWorkoutSessionUseCase: AbandonWorkoutSessionUseCase,
+    private val checkAndCreatePersonalRecordUseCase: CheckAndCreatePersonalRecordUseCase // Will be used in the next step
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WorkoutSessionState())
@@ -109,16 +110,26 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Completes the current set, saves data, and starts the rest timer.
+     * Completes the current set. This is the core function for making progress.
+     * It saves the user's performance for the set, updates the database,
+     * and then starts the rest timer before moving to the next step.
      */
     fun completeCurrentSet() = viewModelScope.launch {
         val session = currentSession.value ?: return@launch
+        val state = _uiState.value
+
+        // Step 1: Create an updated session object with the new set data.
         val updatedSession = updateSetInData(session, isSkipped = false)
+
+        // Step 2: Save the updated session to the database.
         updateWorkoutSessionUseCase(updatedSession)
 
-        val currentExercise = updatedSession.exercises.getOrNull(_uiState.value.currentExerciseIndex)
-        val restTime = currentExercise?.restBetweenSets?.toLong()?.times(1000) ?: 90000L
+        // Step 3 (for next implementation): Check for personal records.
+        // checkAndCreatePersonalRecordUseCase(...)
 
+        // Step 4: Start the rest timer.
+        val currentExercise = updatedSession.exercises.getOrNull(state.currentExerciseIndex)
+        val restTime = currentExercise?.restBetweenSets?.toLong()?.times(1000) ?: 90000L
         _uiState.update { it.copy(isCurrentlyResting = true, restTimeRemaining = restTime, totalRestTime = restTime) }
     }
 
@@ -145,6 +156,7 @@ class WorkoutSessionViewModel @Inject constructor(
 
     /**
      * Contains the logic to advance to the next set or the next exercise.
+     * This also updates the UI state to pre-fill the inputs for the next set.
      */
     private fun moveToNextStep(session: WorkoutSession) {
         val state = _uiState.value
@@ -184,7 +196,11 @@ class WorkoutSessionViewModel @Inject constructor(
     }
 
     /**
-     * Helper to immutably update the session object with the latest set data.
+     * A pure helper function. It takes a session and returns a NEW session object
+     * with the latest executed set data. It does not modify the state directly.
+     * @param session The current workout session.
+     * @param isSkipped True if the set was skipped, false if it was completed.
+     * @return A new WorkoutSession instance with the updated data.
      */
     private fun updateSetInData(session: WorkoutSession, isSkipped: Boolean): WorkoutSession {
         val state = _uiState.value
@@ -205,11 +221,14 @@ class WorkoutSessionViewModel @Inject constructor(
             completedAt = System.currentTimeMillis()
         )
 
+        // Remove any previous attempt for this set number before adding the new one.
         executedSets.removeAll { it.setNumber == setNumber }
         executedSets.add(newSet)
 
+        // Update the specific exercise in the list with the new list of executed sets.
         exercises[state.currentExerciseIndex] = currentExercise.copy(executedSets = executedSets.sortedBy { it.setNumber })
 
+        // Return a new session object with the updated exercises list.
         return session.copy(exercises = exercises)
     }
 

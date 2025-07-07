@@ -462,3 +462,37 @@ class UpdateWorkoutSessionUseCase @Inject constructor(
         return repository.updateWorkoutSession(session)
     }
 }
+
+@Singleton
+class CheckAndCreatePersonalRecordUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    /**
+     * Invokes the use case to check if a new personal record was set and creates it if so.
+     * @param userId The ID of the current user.
+     * @param exerciseId The ID of the exercise performed.
+     * @param weight The weight lifted.
+     * @param reps The repetitions performed.
+     * @param sessionId The ID of the current workout session.
+     * @return A Result containing the new PersonalRecord if one was created, or null otherwise.
+     */
+    suspend operator fun invoke(
+        userId: String,
+        exerciseId: Int,
+        weight: Float,
+        reps: Int,
+        sessionId: String
+    ): Result<PersonalRecord?> {
+        // Basic validation: A PR can only be set with positive weight and reps.
+        if (weight <= 0 || reps <= 0) {
+            return Result.success(null) // Not a valid performance to check for a PR.
+        }
+        return repository.checkAndCreatePersonalRecord(
+            userId = userId,
+            exerciseId = exerciseId,
+            weight = weight,
+            reps = reps,
+            sessionId = sessionId
+        )
+    }
+}
