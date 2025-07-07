@@ -121,6 +121,15 @@ fun WorkoutSessionScreen(
                 onDismiss = { viewModel.hideSettingsDialog() }
             )
         }
+
+        if (uiState.showInvalidInputDialog) {
+            uiState.inputErrorMessage?.let { message ->
+                InvalidInputDialog(
+                    errorMessage = message,
+                    onDismiss = { viewModel.hideInvalidInputDialog() }
+                )
+            }
+        }
     }
 }
 
@@ -209,35 +218,25 @@ private fun WorkoutSessionHeader(
 
             // Control buttons
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                // Use Center arrangement to center the items horizontally
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 // Pause/Resume button
-                Button(
-                    onClick = if (isPaused) onResumeClick else onPauseClick,
-                    enabled = !isLoading,
-                    modifier = Modifier.weight(1f)
-                ) {
+                OutlinedButton(onClick = { if (isPaused) onResumeClick() else onPauseClick() }) {
                     Icon(
                         imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+                        contentDescription = if (isPaused) "Resume" else "Pause"
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isPaused) "Resume" else "Pause")
                 }
 
-                // Stop button
-                OutlinedButton(
+                // Stop Button
+                Button(
                     onClick = onStopClick,
-                    enabled = !isLoading
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Stop")
+                    Icon(imageVector = Icons.Default.Stop, contentDescription = "Stop")
                 }
             }
         }
@@ -417,7 +416,8 @@ private fun CurrentExerciseCard(
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                Row {
+                Row (verticalAlignment = Alignment.CenterVertically)
+                {
                     IconButton(
                         onClick = onRemoveSet,
                         enabled = !isLoading
@@ -486,34 +486,16 @@ private fun CurrentExerciseCard(
             // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
-                Button(
-                    onClick = onCompleteSet,
-                    enabled = !isLoading && currentWeight > 0 && currentReps > 0,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Complete Set")
+                // Complete Set Button
+                Button(onClick = onCompleteSet, modifier = Modifier.weight(2f)) {
+                    Icon(imageVector = Icons.Rounded.Check, contentDescription = "Complete Set")
                 }
 
-                OutlinedButton(
-                    onClick = onSkipSet,
-                    enabled = !isLoading
-                ) {
-                    Text("Skip")
+                // Skip Button
+                OutlinedButton(onClick = onSkipSet, modifier = Modifier.weight(1f)) {
+                    Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Skip Set")
                 }
             }
         }
@@ -1091,3 +1073,20 @@ private fun WorkoutSessionContent(
         }
     }
 
+
+@Composable
+private fun InvalidInputDialog(
+    errorMessage: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Invalid Input") },
+        text = { Text(errorMessage) },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("OK")
+            }
+        }
+    )
+}

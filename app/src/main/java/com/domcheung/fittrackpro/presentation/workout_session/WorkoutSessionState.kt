@@ -1,6 +1,7 @@
 package com.domcheung.fittrackpro.presentation.workout_session
 
 import com.domcheung.fittrackpro.data.model.PersonalRecord
+import com.domcheung.fittrackpro.data.model.WeightUnit
 
 data class WorkoutSessionState(
     // Loading and error states
@@ -34,7 +35,12 @@ data class WorkoutSessionState(
     val showSettingsDialog: Boolean = false,
     val showReplaceExerciseDialog: Boolean = false,
     val showFinishWorkoutDialog: Boolean = false,
-    val newlyAchievedRecords: List<PersonalRecord> = emptyList()
+    val newlyAchievedRecords: List<PersonalRecord> = emptyList(),
+    val weightUnit: WeightUnit = WeightUnit.LB,
+
+    // --- NEW PROPERTIES FOR VALIDATION ---
+    val showInvalidInputDialog: Boolean = false,
+    val inputErrorMessage: String? = null,
 ) {
     val canCompleteWorkout: Boolean
         get() = elapsedTime > 0

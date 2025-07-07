@@ -194,6 +194,11 @@ enum class RecordType {
     MAX_ONE_REP_MAX // Maximum calculated 1RM
 }
 
+
+enum class WeightUnit(val displayName: String) {
+    KG("kg"),
+    LB("lb")
+}
 // ========== Type Converters ==========
 
 /**

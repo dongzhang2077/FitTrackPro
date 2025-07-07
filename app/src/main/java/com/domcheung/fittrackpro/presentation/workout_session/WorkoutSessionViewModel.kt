@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.model.ExecutedExercise
 import com.domcheung.fittrackpro.data.model.ExecutedSet
+import com.domcheung.fittrackpro.data.model.WeightUnit
 import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.model.WorkoutStatus
 import com.domcheung.fittrackpro.domain.usecase.*
@@ -55,6 +56,11 @@ class WorkoutSessionViewModel @Inject constructor(
         initializeReactiveUpdaters()
     }
 
+    /**
+     * This is the single, unified function that handles all state updates reactively.
+     * It combines session data and a 1-second ticker to drive all UI changes,
+     * including timers and pre-filling input fields.
+     */
     private fun initializeReactiveUpdaters() {
         viewModelScope.launch {
             val ticker = flow {
@@ -66,38 +72,55 @@ class WorkoutSessionViewModel @Inject constructor(
 
             currentSession.filterNotNull().combine(ticker) { session, _ -> session }
                 .collect { session ->
-                    val state = _uiState.value
-
-                    // --- NEW, ROBUST TIMER LOGIC ---
-                    // Timer A (Total Duration) runs unless explicitly PAUSED.
-                    val elapsedTime = if (session.status != WorkoutStatus.PAUSED) {
-                        System.currentTimeMillis() - session.startTime - session.pausedDuration
-                    } else {
-                        (session.pauseStartTime ?: System.currentTimeMillis()) - session.startTime - session.pausedDuration
-                    }
-
-                    // Timer B (Rest Countdown) runs ONLY when status is RESTING.
-                    var restTimeRemaining = state.restTimeRemaining
-                    if (session.status == WorkoutStatus.RESTING) {
-                        if (restTimeRemaining >= 1000) {
-                            restTimeRemaining -= 1000
+                    _uiState.update { currentState ->
+                        // --- Timer A: Overall Workout Duration ---
+                        val elapsedTime = if (session.status != WorkoutStatus.PAUSED) {
+                            System.currentTimeMillis() - session.startTime - session.pausedDuration
                         } else {
-                            restTimeRemaining = 0
-                            resumeWorkout() // Rest is over, resume to IN_PROGRESS
+                            (session.pauseStartTime ?: System.currentTimeMillis()) - session.startTime - session.pausedDuration
                         }
-                    }
 
-                    _uiState.update {
-                        it.copy(
+                        // --- Timer B: Rest Countdown ---
+                        var restTimeRemaining = currentState.restTimeRemaining
+                        if (session.status == WorkoutStatus.RESTING) {
+                            if (restTimeRemaining >= 1000) {
+                                restTimeRemaining -= 1000
+                            } else {
+                                restTimeRemaining = 0
+                                resumeWorkout() // Rest is over, resume to IN_PROGRESS
+                            }
+                        }
+
+                        // --- THIS IS THE NEW LOGIC TO PRE-FILL VALUES ---
+                        val exercise = session.exercises.getOrNull(currentState.currentExerciseIndex)
+                        val set = exercise?.plannedSets?.getOrNull(currentState.currentSetIndex)
+
+                        // Only pre-fill if the current value is 0 (i.e., it's a new set).
+                        // This prevents overwriting the user's manual input.
+                        val weightToDisplay = if (currentState.currentWeight == 0f && currentState.currentReps == 0) {
+                            set?.targetWeight ?: 0f
+                        } else {
+                            currentState.currentWeight
+                        }
+                        val repsToDisplay = if (currentState.currentWeight == 0f && currentState.currentReps == 0) {
+                            set?.targetReps ?: 0
+                        } else {
+                            currentState.currentReps
+                        }
+
+                        // --- Update the entire UI State at once ---
+                        currentState.copy(
+                            isLoading = false,
+                            isCurrentlyResting = session.status == WorkoutStatus.RESTING,
                             elapsedTime = elapsedTime.coerceAtLeast(0L),
                             restTimeRemaining = restTimeRemaining,
-                            // The UI for resting is now directly driven by the database status.
-                            isCurrentlyResting = session.status == WorkoutStatus.RESTING,
-                            isLoading = false
+                            currentWeight = weightToDisplay,
+                            currentReps = repsToDisplay
                         )
                     }
 
-                    if (elapsedTime > MAX_WORKOUT_DURATION && session.status == WorkoutStatus.IN_PROGRESS) {
+                    // --- Timer Limit Check (outside the update block) ---
+                    if (_uiState.value.elapsedTime > MAX_WORKOUT_DURATION && session.status == WorkoutStatus.IN_PROGRESS) {
                         pauseWorkout()
                     }
                 }
@@ -108,8 +131,18 @@ class WorkoutSessionViewModel @Inject constructor(
      * Completes the current set, saves data, and puts the session into a RESTING state.
      */
     fun completeCurrentSet() = viewModelScope.launch {
-        val session = currentSession.value ?: return@launch
         val state = _uiState.value
+
+        // --- NEW: Input Validation ---
+        if (state.currentWeight <= 0 || state.currentReps <= 0) {
+            _uiState.update { it.copy(
+                showInvalidInputDialog = true,
+                inputErrorMessage = "Weight and reps must be positive numbers."
+            )}
+            return@launch // Stop execution if validation fails
+        }
+
+        val session = currentSession.value ?: return@launch
         val userId = session.userId
         val currentExercise = session.exercises.getOrNull(state.currentExerciseIndex) ?: return@launch
 
@@ -356,9 +389,20 @@ class WorkoutSessionViewModel @Inject constructor(
         updateWorkoutSessionUseCase(updatedSession)
     }
 
+    /**
+     * Toggles the weight unit between KG and LB.
+     */
+    fun toggleWeightUnit() {
+        _uiState.update {
+            val newUnit = if (it.weightUnit == WeightUnit.KG) WeightUnit.LB else WeightUnit.KG
+            it.copy(weightUnit = newUnit)
+        }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
+
 
     // --- Dialog Handlers ---
 
@@ -406,5 +450,12 @@ class WorkoutSessionViewModel @Inject constructor(
                 (set.actualWeight * set.actualReps).toDouble()
             }
         }.toFloat()
+    }
+
+    /**
+     * Hides the dialog shown for invalid input.
+     */
+    fun hideInvalidInputDialog() {
+        _uiState.update { it.copy(showInvalidInputDialog = false, inputErrorMessage = null) }
     }
 }
