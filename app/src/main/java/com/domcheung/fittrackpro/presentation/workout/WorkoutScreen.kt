@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.domcheung.fittrackpro.data.model.WorkoutPlan
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
+import kotlinx.coroutines.launch
 
 @Composable
 fun WorkoutScreen(
@@ -30,7 +31,10 @@ fun WorkoutScreen(
     val activeWorkoutSession by viewModel.activeWorkoutSession.collectAsState()
     val filteredPlans by viewModel.getFilteredWorkoutPlans().collectAsState()
 
-    // Handle one-time events
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // Handle one-time navigation events
     LaunchedEffect(uiState.workoutStarted) {
         if (uiState.workoutStarted) {
             uiState.startedSessionId?.let { sessionId ->
@@ -43,63 +47,71 @@ fun WorkoutScreen(
     // Show error snackbar
     uiState.errorMessage?.let { errorMessage ->
         LaunchedEffect(errorMessage) {
-            // In a real app, you would show a SnackBar here
-            viewModel.clearError()
+            scope.launch {
+                snackbarHostState.showSnackbar(errorMessage)
+                viewModel.clearError()
+            }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp)
-    ) {
-        // Header with search
-        WorkoutHeader(
-            searchQuery = uiState.searchQuery,
-            onSearchQueryChange = { viewModel.searchWorkoutPlans(it) },
-            isLoading = uiState.isLoading
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Active workout banner if exists
-        activeWorkoutSession?.let { session ->
-            ActiveWorkoutBanner(
-                session = session,
-                onResumeClick = {
-                    onNavigateToWorkoutSession(session.id)
-                },
-                modifier = Modifier.padding(bottom = 16.dp)
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues) // Use padding from Scaffold
+                .padding(20.dp)
+        ) {
+            // Header with search
+            WorkoutHeader(
+                searchQuery = uiState.searchQuery,
+                onSearchQueryChange = { viewModel.searchWorkoutPlans(it) },
+                isLoading = uiState.isLoading
             )
-        }
 
-        // Content based on state
-        when {
-            uiState.isLoading -> {
-                LoadingContent()
-            }
-            filteredPlans.isEmpty() && uiState.searchQuery.isNotEmpty() -> {
-                EmptySearchContent(
-                    searchQuery = uiState.searchQuery,
-                    onClearSearch = { viewModel.searchWorkoutPlans("") }
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Active workout banner if exists
+            activeWorkoutSession?.let { session ->
+                ActiveWorkoutBanner(
+                    session = session,
+                    onResumeClick = {
+                        onNavigateToWorkoutSession(session.id)
+                    },
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
             }
-            userWorkoutPlans.isEmpty() -> {
-                EmptyPlansContent(
-                    onCreatePlanClick = onNavigateToCreatePlan
-                )
-            }
-            else -> {
-                WorkoutPlansContent(
-                    plans = filteredPlans,
-                    onStartWorkout = { planId -> viewModel.startWorkout(planId) },
-                    onCopyPlan = { planId, newName -> viewModel.copyWorkoutPlan(planId, newName) },
-                    onCreatePlanClick = onNavigateToCreatePlan,
-                    isLoading = uiState.isAnyOperationInProgress
-                )
+
+            // Content based on state
+            when {
+                uiState.isLoading -> {
+                    LoadingContent()
+                }
+                filteredPlans.isEmpty() && uiState.searchQuery.isNotEmpty() -> {
+                    EmptySearchContent(
+                        searchQuery = uiState.searchQuery,
+                        onClearSearch = { viewModel.searchWorkoutPlans("") }
+                    )
+                }
+                userWorkoutPlans.isEmpty() -> {
+                    EmptyPlansContent(
+                        onCreatePlanClick = onNavigateToCreatePlan
+                    )
+                }
+                else -> {
+                    WorkoutPlansContent(
+                        plans = filteredPlans,
+                        onStartWorkout = { planId -> viewModel.startWorkout(planId) },
+                        onCopyPlan = { planId, newName -> viewModel.copyWorkoutPlan(planId, newName) },
+                        onCreatePlanClick = onNavigateToCreatePlan,
+                        isLoading = uiState.isAnyOperationInProgress
+                    )
+                }
             }
         }
     }
+
 }
 
 @Composable

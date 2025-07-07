@@ -70,6 +70,7 @@ data class WorkoutSession(
     val userId: String,             // User ID
     val startTime: Long,            // Workout start timestamp
     val endTime: Long? = null,      // Workout end timestamp
+    val pauseStartTime: Long? = null,
     val pausedDuration: Long = 0,   // Total paused time (milliseconds)
     val status: WorkoutStatus,      // Current workout status
     val exercises: List<ExecutedExercise> = emptyList(), // Executed exercises

@@ -36,9 +36,9 @@ fun WorkoutSessionScreen(
     val currentSession by viewModel.currentSession.collectAsState()
 
     // Initialize session
-    LaunchedEffect(sessionId) {
-        viewModel.loadWorkoutSession(sessionId)
-    }
+//    LaunchedEffect(sessionId) {
+//        viewModel.loadWorkoutSession(sessionId)
+//    }
 
     // Handle completion
     LaunchedEffect(uiState.workoutCompleted) {
@@ -82,7 +82,7 @@ fun WorkoutSessionScreen(
 
         // Main content area
         AnimatedContent(
-            targetState = uiState.isResting,
+            targetState = uiState.isCurrentlyResting,
             transitionSpec = {
                 slideInVertically { it } + fadeIn() togetherWith
                         slideOutVertically { -it } + fadeOut()
@@ -129,7 +129,10 @@ fun WorkoutSessionScreen(
     // Dialogs
     if (uiState.showAbandonDialog) {
         AbandonWorkoutDialog(
-            onConfirm = { viewModel.abandonWorkout() },
+            onConfirm = {
+                viewModel.abandonWorkout()
+                // The workoutAbandoned state will now trigger the onNavigateBack lambda
+            },
             onDismiss = { viewModel.hideAbandonDialog() }
         )
     }

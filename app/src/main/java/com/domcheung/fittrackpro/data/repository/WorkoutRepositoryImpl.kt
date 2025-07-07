@@ -109,6 +109,10 @@ class WorkoutRepositoryImpl @Inject constructor(
         return workoutPlanDao.getWorkoutPlanByIdFlow(planId)
     }
 
+    override fun getWorkoutSessionByIdFlow(sessionId: String): Flow<WorkoutSession?> {
+        return workoutSessionDao.getWorkoutSessionByIdFlow(sessionId)
+    }
+
     override fun getTemplateWorkoutPlans(): Flow<List<WorkoutPlan>> {
         return workoutPlanDao.getTemplateWorkoutPlans()
     }
@@ -216,16 +220,31 @@ class WorkoutRepositoryImpl @Inject constructor(
             val plan = workoutPlanDao.getWorkoutPlanById(planId)
                 ?: return Result.failure(Exception("Workout plan not found"))
 
-            // Create new workout session
+            // --- NEW LOGIC START ---
+            // Convert PlannedExercises to ExecutedExercises
+            val executedExercises = plan.exercises.map { plannedExercise ->
+                ExecutedExercise(
+                    exerciseId = plannedExercise.exerciseId,
+                    exerciseName = plannedExercise.exerciseName,
+                    orderIndex = plannedExercise.orderIndex,
+                    plannedSets = plannedExercise.sets,
+                    executedSets = emptyList(), // Initially empty
+                    restBetweenSets = plannedExercise.restBetweenSets
+                )
+            }
+            // --- NEW LOGIC END ---
+
+            // Create new workout session with the converted exercises
             val session = WorkoutSession(
                 id = UUID.randomUUID().toString(),
                 planId = planId,
                 planName = plan.name,
                 originalPlan = plan,
-                currentPlan = plan,
+                currentPlan = plan, // Initially the same as original
                 userId = userId,
                 startTime = System.currentTimeMillis(),
                 status = WorkoutStatus.IN_PROGRESS,
+                exercises = executedExercises, // Use the new list here
                 syncedToFirebase = false
             )
 
@@ -246,9 +265,19 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun pauseWorkoutSession(sessionId: String): Result<Unit> {
+    override suspend fun pauseWorkoutSession(sessionId: String, isResting: Boolean): Result<Unit> {
         return try {
-            workoutSessionDao.updateWorkoutSessionStatus(sessionId, WorkoutStatus.PAUSED)
+            val session = workoutSessionDao.getWorkoutSessionById(sessionId)
+                ?: return Result.failure(Exception("Session not found to pause"))
+
+            // Set status to RESTING or PAUSED based on the context
+            val newStatus = if (isResting) WorkoutStatus.RESTING else WorkoutStatus.PAUSED
+
+            val updatedSession = session.copy(
+                status = newStatus,
+                pauseStartTime = System.currentTimeMillis() // Record pause/rest start time
+            )
+            workoutSessionDao.updateWorkoutSession(updatedSession)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -257,7 +286,24 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun resumeWorkoutSession(sessionId: String): Result<Unit> {
         return try {
-            workoutSessionDao.updateWorkoutSessionStatus(sessionId, WorkoutStatus.IN_PROGRESS)
+            val session = workoutSessionDao.getWorkoutSessionById(sessionId)
+                ?: return Result.failure(Exception("Session not found to resume"))
+
+            if (session.pauseStartTime != null) {
+                // Calculate the duration of this pause and add it to the total paused duration
+                val pauseDuration = System.currentTimeMillis() - session.pauseStartTime
+                val totalPausedDuration = session.pausedDuration + pauseDuration
+
+                val updatedSession = session.copy(
+                    status = WorkoutStatus.IN_PROGRESS,
+                    pausedDuration = totalPausedDuration,
+                    pauseStartTime = null // Clear pause start time
+                )
+                workoutSessionDao.updateWorkoutSession(updatedSession)
+            } else {
+                // If resuming without a pause start time (e.g. from force close), just change status
+                workoutSessionDao.updateWorkoutSessionStatus(sessionId, WorkoutStatus.IN_PROGRESS)
+            }
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -540,4 +586,73 @@ class WorkoutRepositoryImpl @Inject constructor(
             )
         )
     }
+
+
+    /**
+     * Seeds the database with initial sample workout plans for a user if they have none.
+     * This ensures new users have content to interact with immediately.
+     */
+    override suspend fun seedInitialPlansIfEmpty(userId: String) {
+        try {
+            val planCount = workoutPlanDao.getUserWorkoutPlanCount(userId)
+            if (planCount == 0) {
+                // User has no plans, create sample ones for them
+                val samplePlans = createSampleWorkoutPlans(userId)
+                workoutPlanDao.insertWorkoutPlans(samplePlans)
+            }
+        } catch (e: Exception) {
+            // Log error or handle it silently
+            // It's not critical if seeding fails, user can create plans manually
+            println("Error seeding initial workout plans: ${e.message}")
+        }
+    }
+
+    /**
+     * Creates a list of sample workout plans.
+     */
+    private fun createSampleWorkoutPlans(userId: String): List<WorkoutPlan> {
+        val fullBodyPlan = WorkoutPlan(
+            id = UUID.randomUUID().toString(),
+            name = "Full Body Strength - Beginner",
+            description = "A great starting point to build foundational strength.",
+            targetMuscleGroups = listOf("Full Body", "Strength"),
+            estimatedDuration = 45,
+            exercises = listOf(
+                PlannedExercise(
+                    exerciseId = 2, // Squat
+                    exerciseName = "Squat",
+                    orderIndex = 0,
+                    sets = listOf(
+                        PlannedSet(1, 40f, 8),
+                        PlannedSet(2, 40f, 8),
+                        PlannedSet(3, 40f, 8)
+                    )
+                ),
+                PlannedExercise(
+                    exerciseId = 1, // Bench Press
+                    exerciseName = "Bench Press",
+                    orderIndex = 1,
+                    sets = listOf(
+                        PlannedSet(1, 30f, 8),
+                        PlannedSet(2, 30f, 8),
+                        PlannedSet(3, 30f, 8)
+                    )
+                ),
+                PlannedExercise(
+                    exerciseId = 3, // Deadlift
+                    exerciseName = "Deadlift",
+                    orderIndex = 2,
+                    sets = listOf(
+                        PlannedSet(1, 50f, 5),
+                        PlannedSet(2, 50f, 5)
+                    )
+                )
+            ),
+            createdBy = userId,
+            isTemplate = true,
+            syncedToFirebase = false
+        )
+        return listOf(fullBodyPlan)
+    }
 }
+

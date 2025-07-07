@@ -335,8 +335,13 @@ class CompleteWorkoutSessionUseCase @Inject constructor(
 class PauseWorkoutSessionUseCase @Inject constructor(
     private val repository: WorkoutRepository
 ) {
-    suspend operator fun invoke(sessionId: String): Result<Unit> {
-        return repository.pauseWorkoutSession(sessionId)
+    /**
+     * Invokes the use case to pause a workout session.
+     * @param sessionId The ID of the session to pause.
+     * @param isResting True if this pause is for a rest period, false if it's a manual user pause.
+     */
+    suspend operator fun invoke(sessionId: String, isResting: Boolean): Result<Unit> {
+        return repository.pauseWorkoutSession(sessionId, isResting)
     }
 }
 
@@ -433,5 +438,27 @@ class AbandonWorkoutSessionUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(sessionId: String): Result<Unit> {
         return repository.abandonWorkoutSession(sessionId)
+    }
+}
+
+@Singleton
+class GetWorkoutSessionByIdFlowUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    operator fun invoke(sessionId: String): Flow<WorkoutSession?> {
+        return repository.getWorkoutSessionByIdFlow(sessionId)
+    }
+}
+
+@Singleton
+class UpdateWorkoutSessionUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    /**
+     * Invokes the use case to update a given workout session.
+     * This is typically used to save progress or any changes during the session.
+     */
+    suspend operator fun invoke(session: WorkoutSession): Result<Unit> {
+        return repository.updateWorkoutSession(session)
     }
 }

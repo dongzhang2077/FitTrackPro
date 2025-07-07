@@ -4,58 +4,71 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.domcheung.fittrackpro.presentation.login.LoginScreen
 import com.domcheung.fittrackpro.presentation.register.RegisterScreen
 import com.domcheung.fittrackpro.presentation.main.MainTabScreen
 import com.domcheung.fittrackpro.presentation.splash.SplashScreen
+import com.domcheung.fittrackpro.presentation.workout_session.WorkoutSessionScreen
 
 // Navigation routes
 object Routes {
-    const val SPLASH = "splash"   // New splash screen
+    const val SPLASH = "splash"
     const val LOGIN = "login"
     const val REGISTER = "register"
-    const val MAIN = "main"       // Main app with tabs
-    const val HOME = "home"       // Individual tab - for future deep linking
+    const val MAIN = "main"
+
+    // New route for the workout session screen
+    // It includes a placeholder for the sessionId argument
+    const val WORKOUT_SESSION_ROUTE = "workout_session"
+    const val WORKOUT_SESSION_ARG_ID = "sessionId"
+    const val WORKOUT_SESSION = "$WORKOUT_SESSION_ROUTE/{$WORKOUT_SESSION_ARG_ID}"
+
+    /**
+     * Helper function to build the full route with a specific session ID.
+     * e.g., Routes.workoutSession("some-uuid-123") -> "workout_session/some-uuid-123"
+     */
+    fun workoutSession(sessionId: String) = "$WORKOUT_SESSION_ROUTE/$sessionId"
 }
 
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Routes.SPLASH  // Start with splash screen
+    startDestination: String = Routes.SPLASH
 ) {
     NavHost(
         navController = navController,
         startDestination = startDestination,
-        // Add smooth enter/exit animations
         enterTransition = {
             slideInHorizontally(
-                initialOffsetX = { 300 }, // Slide in from right
+                initialOffsetX = { 300 },
                 animationSpec = tween(300)
             ) + fadeIn(animationSpec = tween(300))
         },
         exitTransition = {
             slideOutHorizontally(
-                targetOffsetX = { -300 }, // Slide out to left
+                targetOffsetX = { -300 },
                 animationSpec = tween(300)
             ) + fadeOut(animationSpec = tween(300))
         },
         popEnterTransition = {
             slideInHorizontally(
-                initialOffsetX = { -300 }, // Slide in from left when going back
+                initialOffsetX = { -300 },
                 animationSpec = tween(300)
             ) + fadeIn(animationSpec = tween(300))
         },
         popExitTransition = {
             slideOutHorizontally(
-                targetOffsetX = { 300 }, // Slide out to right when going back
+                targetOffsetX = { 300 },
                 animationSpec = tween(300)
             ) + fadeOut(animationSpec = tween(300))
         }
     ) {
-        // Splash Screen (new starting point)
+        // Splash Screen
         composable(Routes.SPLASH) {
             SplashScreen(
                 onNavigateToLogin = {
@@ -75,9 +88,7 @@ fun AppNavigation(
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {
-                    // Navigate to main app after successful login
                     navController.navigate(Routes.MAIN) {
-                        // Clear login from back stack so user can't go back
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -91,7 +102,6 @@ fun AppNavigation(
         composable(Routes.REGISTER) {
             RegisterScreen(
                 onRegisterSuccess = {
-                    // Navigate back to login screen after successful registration
                     navController.popBackStack(Routes.LOGIN, inclusive = false)
                 },
                 onNavigateToLogin = {
@@ -102,10 +112,10 @@ fun AppNavigation(
 
         // Main App with Tab Navigation
         composable(Routes.MAIN) {
+            // Pass the NavController down to MainTabScreen so it can navigate deeper
             MainTabScreen(
+                navController = navController,
                 onSignOut = {
-                    println("DEBUG: AppNavigation - onSignOut called")
-                    // Navigate back to login and clear main from back stack
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.MAIN) { inclusive = true }
                     }
@@ -113,9 +123,28 @@ fun AppNavigation(
             )
         }
 
-        // TODO: Add individual tab routes for deep linking
-        // composable(Routes.HOME) { ... }
-        // composable("workout/{planId}") { ... }
-        // composable("progress/{timeRange}") { ... }
+        // --- NEW ---
+        // Add the composable for the WorkoutSessionScreen
+        composable(
+            route = Routes.WORKOUT_SESSION,
+            arguments = listOf(navArgument(Routes.WORKOUT_SESSION_ARG_ID) {
+                type = NavType.StringType
+            })
+        ) { backStackEntry ->
+            // Extract the sessionId from the navigation arguments
+            val sessionId = backStackEntry.arguments?.getString(Routes.WORKOUT_SESSION_ARG_ID) ?: ""
+
+            WorkoutSessionScreen(
+                sessionId = sessionId,
+                onNavigateBack = {
+                    // Simply pop the back stack to return to the previous screen
+                    navController.popBackStack()
+                },
+                onWorkoutComplete = {
+                    // After workout is complete, also pop back to the previous screen
+                    navController.popBackStack()
+                }
+            )
+        }
     }
 }

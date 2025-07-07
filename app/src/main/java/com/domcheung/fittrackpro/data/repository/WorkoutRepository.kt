@@ -82,6 +82,11 @@ interface WorkoutRepository {
     fun getWorkoutPlanByIdFlow(planId: String): Flow<WorkoutPlan?>
 
     /**
+     * Get workout session by ID with live updates
+     */
+    fun getWorkoutSessionByIdFlow(sessionId: String): Flow<WorkoutSession?>
+
+    /**
      * Get template workout plans
      */
     fun getTemplateWorkoutPlans(): Flow<List<WorkoutPlan>>
@@ -163,7 +168,7 @@ interface WorkoutRepository {
     /**
      * Pause workout session
      */
-    suspend fun pauseWorkoutSession(sessionId: String): Result<Unit>
+    suspend fun pauseWorkoutSession(sessionId: String, isResting: Boolean): Result<Unit>
 
     /**
      * Resume workout session
@@ -262,6 +267,11 @@ interface WorkoutRepository {
      * Check if data needs sync
      */
     suspend fun hasUnsyncedData(): Boolean
+
+    /**
+     * Seeds initial data if necessary (e.g., for new users).
+     */
+    suspend fun seedInitialPlansIfEmpty(userId: String)
 }
 
 // ========== Data Transfer Objects ==========
