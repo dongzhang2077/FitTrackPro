@@ -1,23 +1,26 @@
 package com.domcheung.fittrackpro.presentation.plan_builder
 
+import androidx.compose.animation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Done
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PostAdd
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.data.model.PlannedExercise
+import com.domcheung.fittrackpro.data.model.PlannedSet
 
 /**
  * The main screen for building and editing a workout plan.
@@ -28,8 +31,6 @@ fun PlanBuilderScreen(
     viewModel: PlanBuilderViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit
 ) {
-    // --- NEW: Collect state from ViewModel ---
-    // This allows the UI to react to changes in the ViewModel's state.
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
@@ -38,25 +39,22 @@ fun PlanBuilderScreen(
                 title = { Text("Create Plan") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: Implement Save logic */ }) {
-                        Icon(
-                            imageVector = Icons.Default.Done,
-                            contentDescription = "Save Plan"
-                        )
+                    IconButton(onClick = { /* TODO: viewModel.savePlan() */ }) {
+                        Icon(imageVector = Icons.Default.Done, contentDescription = "Save Plan")
                     }
                 }
             )
         },
         floatingActionButton = {
             LargeFloatingActionButton(
-                onClick = { /* TODO: Implement Add Exercise logic */ },
+                onClick = {
+                    // For testing, we add a sample exercise. Later this will open the Exercise Library.
+                    viewModel.addExercise(com.domcheung.fittrackpro.data.model.Exercise(id = 1, name = "Test Exercise"))
+                },
                 shape = CircleShape,
             ) {
                 Icon(
@@ -68,7 +66,6 @@ fun PlanBuilderScreen(
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -76,7 +73,6 @@ fun PlanBuilderScreen(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // --- Editable Plan Title ---
             EditablePlanTitle(
                 name = uiState.planName,
                 isEditing = uiState.isEditingName,
@@ -84,18 +80,157 @@ fun PlanBuilderScreen(
                 onToggleEdit = viewModel::onToggleEditName
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // --- Conditional Content: Empty State or Exercise List ---
+            HorizontalDivider()
+
             if (uiState.exercises.isEmpty()) {
-                EmptyPlanContent(
-                    onAddExerciseClick = { /* TODO: Call FAB's logic */ }
-                )
+                EmptyPlanContent()
             } else {
-                // TODO: Implement the exercise list here in the next step
-                Text("Exercise list will go here.")
+                // The new exercise list UI
+                PlanExerciseList(
+                    exercises = uiState.exercises,
+                    viewModel = viewModel // Pass viewModel to handle events
+                )
             }
         }
+    }
+}
+
+/**
+ * Displays the list of exercises in the plan.
+ */
+@Composable
+private fun PlanExerciseList(
+    exercises: List<PlannedExercise>,
+    viewModel: PlanBuilderViewModel
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(vertical = 16.dp)
+    ) {
+        itemsIndexed(exercises, key = { _, item -> item.exerciseId }) { index, exercise ->
+            PlanExerciseItem(
+                exercise = exercise,
+                onRemoveClick = { viewModel.removeExercise(index) },
+                onAddSetClick = { viewModel.addSetToExercise(index) },
+                onRemoveSetClick = { viewModel.removeSetFromExercise(index) },
+                onSetChanged = { setIndex, updatedSet ->
+                    viewModel.updateSet(index, setIndex, updatedSet)
+                }
+            )
+        }
+    }
+}
+
+/**
+ * A single, expandable item in the exercise list.
+ */
+@Composable
+private fun PlanExerciseItem(
+    exercise: PlannedExercise,
+    onRemoveClick: () -> Unit,
+    onAddSetClick: () -> Unit,
+    onRemoveSetClick: () -> Unit,
+    onSetChanged: (Int, PlannedSet) -> Unit
+) {
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            // Header part of the card (always visible)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { isExpanded = !isExpanded } // Toggle expansion on click
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // TODO: Replace with GIF placeholder
+                Icon(Icons.Default.FitnessCenter, contentDescription = null, modifier = Modifier.size(40.dp))
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = exercise.exerciseName, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        text = "${exercise.sets.size} sets",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onRemoveClick) {
+                    Icon(Icons.Rounded.Delete, contentDescription = "Remove Exercise")
+                }
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = "Expand or collapse"
+                )
+            }
+
+            // Expandable content
+            AnimatedVisibility(visible = isExpanded) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                    HorizontalDivider()
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // List of sets for this exercise
+                    exercise.sets.forEachIndexed { setIndex, set ->
+                        SetInputRow(
+                            set = set,
+                            onSetChanged = { updatedSet -> onSetChanged(setIndex, updatedSet) }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    // Add/Remove Set buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                    ) {
+                        IconButton(onClick = onRemoveSetClick, enabled = exercise.sets.size > 1) {
+                            Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Remove last set")
+                        }
+                        IconButton(onClick = onAddSetClick) {
+                            Icon(Icons.Default.AddCircleOutline, contentDescription = "Add a new set")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A row for inputting the details of a single set (weight and reps).
+ */
+@Composable
+private fun SetInputRow(
+    set: PlannedSet,
+    onSetChanged: (PlannedSet) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(text = "Set ${set.setNumber}", modifier = Modifier.width(50.dp))
+        OutlinedTextField(
+            value = if (set.targetWeight > 0) set.targetWeight.toString() else "",
+            onValueChange = { onSetChanged(set.copy(targetWeight = it.toFloatOrNull() ?: 0f)) },
+            label = { Text("Weight (lb)") },
+            modifier = Modifier.weight(1f),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+        OutlinedTextField(
+            value = if (set.targetReps > 0) set.targetReps.toString() else "",
+            onValueChange = { onSetChanged(set.copy(targetReps = it.toIntOrNull() ?: 0)) },
+            label = { Text("Reps") },
+            modifier = Modifier.weight(1f),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
     }
 }
 
