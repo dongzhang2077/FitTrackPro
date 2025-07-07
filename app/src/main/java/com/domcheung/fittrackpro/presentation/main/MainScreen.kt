@@ -67,8 +67,7 @@ fun MainTabScreen(
                             navController.navigate(Routes.workoutSession(sessionId))
                         },
                         onNavigateToCreatePlan = {
-                            // TODO: Navigate to create plan screen
-                            // navController.navigate("create_plan")
+                            navController.navigate(Routes.PLAN_BUILDER)
                         }
                     )
 

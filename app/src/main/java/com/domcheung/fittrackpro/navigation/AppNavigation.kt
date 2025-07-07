@@ -12,6 +12,7 @@ import androidx.navigation.navArgument
 import com.domcheung.fittrackpro.presentation.login.LoginScreen
 import com.domcheung.fittrackpro.presentation.register.RegisterScreen
 import com.domcheung.fittrackpro.presentation.main.MainTabScreen
+import com.domcheung.fittrackpro.presentation.plan_builder.PlanBuilderScreen
 import com.domcheung.fittrackpro.presentation.splash.SplashScreen
 import com.domcheung.fittrackpro.presentation.workout_session.WorkoutSessionScreen
 
@@ -28,6 +29,8 @@ object Routes {
     const val WORKOUT_SESSION_ARG_ID = "sessionId"
     const val WORKOUT_SESSION = "$WORKOUT_SESSION_ROUTE/{$WORKOUT_SESSION_ARG_ID}"
 
+    // new route for plan
+    const val PLAN_BUILDER = "plan_builder"
     /**
      * Helper function to build the full route with a specific session ID.
      * e.g., Routes.workoutSession("some-uuid-123") -> "workout_session/some-uuid-123"
@@ -143,6 +146,15 @@ fun AppNavigation(
                     // This will also correctly return to the previous screen
                     navController.popBackStack()
                 }
+            )
+        }
+
+        // new add workout plan
+        composable(Routes.PLAN_BUILDER) {
+            // We will create this screen in the next steps.
+            // For now, it can be a placeholder.
+            PlanBuilderScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }
