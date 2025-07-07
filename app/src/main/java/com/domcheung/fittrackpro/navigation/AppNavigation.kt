@@ -131,17 +131,16 @@ fun AppNavigation(
                 type = NavType.StringType
             })
         ) { backStackEntry ->
-            // Extract the sessionId from the navigation arguments
             val sessionId = backStackEntry.arguments?.getString(Routes.WORKOUT_SESSION_ARG_ID) ?: ""
 
             WorkoutSessionScreen(
                 sessionId = sessionId,
                 onNavigateBack = {
-                    // Simply pop the back stack to return to the previous screen
+                    // This will now correctly return to the screen that opened the session
                     navController.popBackStack()
                 },
                 onWorkoutComplete = {
-                    // After workout is complete, also pop back to the previous screen
+                    // This will also correctly return to the previous screen
                     navController.popBackStack()
                 }
             )

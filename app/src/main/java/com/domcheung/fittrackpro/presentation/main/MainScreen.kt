@@ -13,13 +13,14 @@ import com.domcheung.fittrackpro.presentation.model.MainTab
 import com.domcheung.fittrackpro.presentation.profile.ProfileScreen
 import com.domcheung.fittrackpro.presentation.progress.ProgressScreen
 import com.domcheung.fittrackpro.presentation.workout.WorkoutScreen
+import androidx.compose.runtime.saveable.rememberSaveable
 
 @Composable
 fun MainTabScreen(
     navController: NavHostController, // Receive the NavController
     onSignOut: () -> Unit = {}
 ) {
-    var selectedTab by remember { mutableStateOf(MainTab.HOME) }
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
 
     Scaffold(
         bottomBar = {
