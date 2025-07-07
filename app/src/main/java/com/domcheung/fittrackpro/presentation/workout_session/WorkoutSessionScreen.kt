@@ -4,7 +4,6 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,10 +14,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
@@ -29,6 +26,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.filled.SwapHoriz
 
 @Composable
 fun WorkoutSessionScreen(
@@ -260,7 +258,8 @@ private fun WorkoutContent(
     uiState: WorkoutSessionState,
     onShowCompleteDialog: () -> Unit,
     isLoading: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    viewModel: WorkoutSessionViewModel
 ) {
     LazyColumn(
         modifier = modifier
@@ -284,7 +283,9 @@ private fun WorkoutContent(
                     onReplaceExercise = onReplaceExercise,
                     onAddSet = onAddSet,
                     onRemoveSet = onRemoveSet,
-                    isLoading = isLoading
+                    isLoading = isLoading,
+                    weightUnit = uiState.weightUnit,
+                    onToggleUnit = { viewModel.toggleWeightUnit() },
                 )
             }
         }
@@ -362,7 +363,9 @@ private fun CurrentExerciseCard(
     onReplaceExercise: () -> Unit,
     onAddSet: () -> Unit,
     onRemoveSet: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    weightUnit: WeightUnit,
+    onToggleUnit: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -456,17 +459,60 @@ private fun CurrentExerciseCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Weight input
+                // Helper to calculate and format the weight in the currently selected unit.
+                val weightInCurrentUnit by remember(currentWeight, weightUnit) {
+                    derivedStateOf {
+                        val converted = if (weightUnit == WeightUnit.LB) {
+                            currentWeight * 2.20462f
+                        } else {
+                            currentWeight
+                        }
+                        // Format to one decimal place if not zero.
+                        if (converted > 0) String.format("%.1f", converted) else ""
+                    }
+                }
+                // Weight input field
                 OutlinedTextField(
-                    value = if (currentWeight > 0) currentWeight.toString() else "",
-                    onValueChange = { value ->
-                        value.toFloatOrNull()?.let { onWeightChange(it) }
+                    value = weightInCurrentUnit,
+                    onValueChange = { newValue ->
+                        val parsedValue = newValue.toFloatOrNull() ?: 0f
+                        // Convert the user's input back to KG for consistent storage.
+                        val weightInKg = if (weightUnit == WeightUnit.LB) {
+                            parsedValue / 2.20462f
+                        } else {
+                            parsedValue
+                        }
+                        onWeightChange(weightInKg)
                     },
-                    label = { Text("Weight (kg)") },
+                    label = { Text("Weight") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
-                    enabled = !isLoading
+                    enabled = !isLoading,
+                    // The trailing icon now uses the passed-in parameters.
+                    trailingIcon = {
+                        Row(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onToggleUnit() } // Use the passed-in lambda
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = weightUnit.displayName, // Use the passed-in unit
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = Icons.Default.SwapHoriz,
+                                contentDescription = "Toggle weight unit",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
                 )
+
 
                 // Reps input
                 OutlinedTextField(
@@ -991,7 +1037,9 @@ private fun WorkoutSessionContent(
                     onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
                     onAddSet = { viewModel.addSetToCurrentExercise() },
                     onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
-                    isLoading = uiState.isLoading
+                    isLoading = uiState.isLoading,
+                    weightUnit = uiState.weightUnit,
+                    onToggleUnit = { viewModel.toggleWeightUnit() }
                 )
             }
         }

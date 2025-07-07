@@ -36,6 +36,7 @@ data class WorkoutSessionState(
     val showReplaceExerciseDialog: Boolean = false,
     val showFinishWorkoutDialog: Boolean = false,
     val newlyAchievedRecords: List<PersonalRecord> = emptyList(),
+    //default weight
     val weightUnit: WeightUnit = WeightUnit.LB,
 
     // --- NEW PROPERTIES FOR VALIDATION ---
