@@ -52,8 +52,10 @@ fun PlanBuilderScreen(
         floatingActionButton = {
             LargeFloatingActionButton(
                 onClick = {
-                    // For testing, we add a sample exercise. Later this will open the Exercise Library.
-                    viewModel.addExercise(com.domcheung.fittrackpro.data.model.Exercise(id = 1, name = "Test Exercise"))
+                    // For testing, we add a sample exercise with a unique ID.
+                    // Using System.currentTimeMillis() is a simple way to ensure the ID is unique for each click.
+                    val uniqueId = System.currentTimeMillis().toInt()
+                    viewModel.addExercise(com.domcheung.fittrackpro.data.model.Exercise(id = uniqueId, name = "Test Exercise $uniqueId"))
                 },
                 shape = CircleShape,
             ) {
@@ -284,9 +286,7 @@ private fun EditablePlanTitle(
  * It prompts the user to add their first exercise.
  */
 @Composable
-private fun EmptyPlanContent(
-    onAddExerciseClick: () -> Unit
-) {
+private fun EmptyPlanContent() {
     Column(
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
