@@ -81,63 +81,62 @@ class CreateCustomExerciseUseCase @Inject constructor(
 
 // ========== Workout Plan Use Cases ==========
 
+// In WorkoutUseCases.kt
+
 /**
- * Use case for creating workout plans
- * Validates and creates new workout plans
+ * Use case for creating a new workout plan.
+ * It takes a complete WorkoutPlan object, enriches it with calculated data,
+ * and passes it to the repository for creation.
  */
 @Singleton
 class CreateWorkoutPlanUseCase @Inject constructor(
     private val repository: WorkoutRepository
 ) {
-    suspend operator fun invoke(
-        name: String,
-        description: String,
-        exercises: List<PlannedExercise>,
-        userId: String,
-        isTemplate: Boolean = true
-    ): Result<String> {
-        // Validate input
-        if (name.isBlank()) {
-            return Result.failure(Exception("Workout plan name cannot be empty"))
+    /**
+     * @param workoutPlan The plan object created in the ViewModel.
+     * @return A Result containing the ID of the newly created plan.
+     */
+    suspend operator fun invoke(workoutPlan: WorkoutPlan): Result<String> {
+        // Validation can be done here before passing to the repository
+        if (workoutPlan.name.isBlank()) {
+            return Result.failure(Exception("Plan name cannot be empty."))
         }
-        if (exercises.isEmpty()) {
-            return Result.failure(Exception("Workout plan must contain at least one exercise"))
-        }
-        if (userId.isBlank()) {
-            return Result.failure(Exception("User ID is required"))
+        if (workoutPlan.exercises.isEmpty()) {
+            return Result.failure(Exception("Plan must have at least one exercise."))
         }
 
-        val estimatedDuration = calculateEstimatedDuration(exercises)
-        val targetMuscleGroups = extractTargetMuscleGroups(exercises)
+        // Use the helper functions to calculate and enrich the plan object
+        val estimatedDuration = calculateEstimatedDuration(workoutPlan.exercises)
+        // val targetMuscleGroups = extractTargetMuscleGroups(workoutPlan.exercises) // This can be added later
 
-        val workoutPlan = WorkoutPlan(
-            id = "", // Will be generated in repository
-            name = name.trim(),
-            description = description.trim(),
-            targetMuscleGroups = targetMuscleGroups,
+        // Create the final plan object to be saved
+        val finalPlan = workoutPlan.copy(
             estimatedDuration = estimatedDuration,
-            exercises = exercises,
-            createdBy = userId,
-            isTemplate = isTemplate
+            // targetMuscleGroups = targetMuscleGroups
         )
 
-        return repository.createWorkoutPlan(workoutPlan)
+        return repository.createWorkoutPlan(finalPlan)
     }
 
+    /**
+     * Calculates the estimated duration of a workout plan in minutes.
+     * @param exercises The list of planned exercises.
+     * @return The total estimated duration in minutes.
+     */
     private fun calculateEstimatedDuration(exercises: List<PlannedExercise>): Int {
-        // Rough estimation: 3 minutes per set + rest time
+        // Rough estimation: 1.5 minutes per set (including rest)
         val totalSets = exercises.sumOf { it.sets.size }
-        val totalRestTime = exercises.sumOf { exercise ->
-            exercise.sets.sumOf { it.restAfter.toInt() }
-        } / 60 // Convert to minutes
-
-        return (totalSets * 3) + totalRestTime
+        return (totalSets * 1.5).toInt()
     }
 
+    /**
+     * Extracts a unique list of muscle groups from the exercises in a plan.
+     * NOTE: This requires that the Exercise objects are fully detailed.
+     * This can be implemented in a future step.
+     */
     private fun extractTargetMuscleGroups(exercises: List<PlannedExercise>): List<String> {
-        // This would typically require querying exercise details
-        // For now, return empty list - to be implemented with exercise lookup
-        return emptyList()
+        // return exercises.flatMap { it.muscles }.distinct()
+        return emptyList() // Keep it simple for now
     }
 }
 

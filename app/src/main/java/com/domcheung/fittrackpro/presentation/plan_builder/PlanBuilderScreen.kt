@@ -33,7 +33,25 @@ fun PlanBuilderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // --- NEW: Handle successful save ---
+    // When isPlanSaved becomes true, navigate back.
+    LaunchedEffect(uiState.isPlanSaved) {
+        if (uiState.isPlanSaved) {
+            onNavigateBack()
+        }
+    }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(uiState.errorMessage) {
+        uiState.errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearErrorMessage()
+        }
+    }
+
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Create Plan") },
@@ -43,7 +61,8 @@ fun PlanBuilderScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { /* TODO: viewModel.savePlan() */ }) {
+                    // --- Connect the save button to the ViewModel function ---
+                    IconButton(onClick = { viewModel.savePlan() }) {
                         Icon(imageVector = Icons.Default.Done, contentDescription = "Save Plan")
                     }
                 }
