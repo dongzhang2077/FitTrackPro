@@ -1,26 +1,29 @@
 package com.domcheung.fittrackpro.presentation.plan_builder
 
-import androidx.compose.animation.*
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.presentation.exercise_library.ExerciseLibraryScreen
+import kotlinx.coroutines.launch
 import com.domcheung.fittrackpro.data.model.PlannedExercise
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import com.domcheung.fittrackpro.data.model.PlannedSet
+
 
 /**
  * The main screen for building and editing a workout plan.
@@ -32,6 +35,41 @@ fun PlanBuilderScreen(
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // State for controlling the bottom sheet
+    val sheetState = rememberModalBottomSheetState()
+    var isSheetOpen by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // --- NEW: Modal Bottom Sheet for Exercise Library ---
+    if (isSheetOpen) {
+        ModalBottomSheet(
+            onDismissRequest = { isSheetOpen = false },
+            sheetState = sheetState
+        ) {
+            // The content of the bottom sheet is our ExerciseLibraryScreen
+            ExerciseLibraryScreen(
+                onClose = {
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) {
+                            isSheetOpen = false
+                        }
+                    }
+                },
+                onAddExercises = { selectedIds ->
+                    viewModel.addExercisesByIds(selectedIds)
+                    scope.launch { sheetState.hide() }.invokeOnCompletion {
+                        if (!sheetState.isVisible) {
+                            isSheetOpen = false
+                        }
+                    }
+                }
+            )
+        }
+    }
+
+
+
 
     // --- NEW: Handle successful save ---
     // When isPlanSaved becomes true, navigate back.
@@ -70,12 +108,7 @@ fun PlanBuilderScreen(
         },
         floatingActionButton = {
             LargeFloatingActionButton(
-                onClick = {
-                    // For testing, we add a sample exercise with a unique ID.
-                    // Using System.currentTimeMillis() is a simple way to ensure the ID is unique for each click.
-                    val uniqueId = System.currentTimeMillis().toInt()
-                    viewModel.addExercise(com.domcheung.fittrackpro.data.model.Exercise(id = uniqueId, name = "Test Exercise $uniqueId"))
-                },
+                onClick =  { isSheetOpen = true },
                 shape = CircleShape,
             ) {
                 Icon(

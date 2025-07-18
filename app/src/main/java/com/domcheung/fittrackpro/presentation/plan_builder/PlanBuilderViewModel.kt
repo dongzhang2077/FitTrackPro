@@ -22,11 +22,45 @@ import javax.inject.Inject
 @HiltViewModel
 class PlanBuilderViewModel @Inject constructor(
     private val createWorkoutPlanUseCase: CreateWorkoutPlanUseCase,
+    private val getExercisesByIdsUseCase: GetExercisesByIdsUseCase,
     private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlanBuilderState())
     val uiState: StateFlow<PlanBuilderState> = _uiState
+
+    /**
+     * Called when exercises are selected from the library.
+     * It fetches the full Exercise details and converts them into PlannedExercise objects.
+     * @param selectedIds A set of IDs for the exercises chosen by the user.
+     */
+    fun addExercisesByIds(selectedIds: Set<Int>) {
+        viewModelScope.launch {
+            if (selectedIds.isEmpty()) return@launch
+
+            val existingExerciseIds = _uiState.value.exercises.map { it.exerciseId }.toSet()
+            // Filter out IDs that are already in the plan to avoid duplicates
+            val newIds = selectedIds.filter { it !in existingExerciseIds }
+            if (newIds.isEmpty()) return@launch
+
+            // Fetch the full exercise data from the repository
+            val exercisesToAdd = getExercisesByIdsUseCase(newIds.toList())
+
+            val newPlannedExercises = exercisesToAdd.map { exercise ->
+                PlannedExercise(
+                    exerciseId = exercise.id,
+                    exerciseName = exercise.name,
+                    orderIndex = _uiState.value.exercises.size + 1,
+                    // Add one default set
+                    sets = listOf(PlannedSet(setNumber = 1, targetWeight = 20f, targetReps = 10))
+                )
+            }
+
+            _uiState.update {
+                it.copy(exercises = it.exercises + newPlannedExercises)
+            }
+        }
+    }
 
     /**
      * The main function to save the newly created workout plan.

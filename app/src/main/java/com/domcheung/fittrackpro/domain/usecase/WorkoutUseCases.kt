@@ -419,3 +419,28 @@ class DeleteWorkoutPlanUseCase @Inject constructor(
         return repository.deleteWorkoutPlan(planId)
     }
 }
+
+
+/**
+ * Use case for getting all exercises from the repository.
+ */
+@Singleton
+class GetAllExercisesUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    operator fun invoke(): Flow<List<Exercise>> {
+        return repository.getAllExercises()
+    }
+}
+
+/**
+ * Use case for getting a list of exercises by their specific IDs.
+ */
+@Singleton
+class GetExercisesByIdsUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(ids: List<Int>): List<Exercise> {
+        return repository.getExercisesByIds(ids)
+    }
+}

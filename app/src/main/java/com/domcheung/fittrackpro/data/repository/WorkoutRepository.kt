@@ -272,6 +272,8 @@ interface WorkoutRepository {
      * Seeds initial data if necessary (e.g., for new users).
      */
     suspend fun seedInitialPlansIfEmpty(userId: String)
+
+    suspend fun getExercisesByIds(ids: List<Int>): List<Exercise>
 }
 
 // ========== Data Transfer Objects ==========

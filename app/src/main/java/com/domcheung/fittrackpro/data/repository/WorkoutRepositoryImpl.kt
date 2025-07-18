@@ -653,5 +653,14 @@ class WorkoutRepositoryImpl @Inject constructor(
         )
         return listOf(fullBodyPlan)
     }
+
+    override suspend fun getExercisesByIds(ids: List<Int>): List<Exercise> {
+        return try {
+            exerciseDao.getExercisesByIds(ids)
+        } catch (e: Exception) {
+            // Return an empty list in case of an error
+            emptyList()
+        }
+    }
 }
 
