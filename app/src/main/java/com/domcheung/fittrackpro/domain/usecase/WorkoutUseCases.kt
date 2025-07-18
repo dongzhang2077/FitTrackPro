@@ -400,3 +400,22 @@ class SyncExercisesUseCase @Inject constructor(
         return repository.syncExercisesFromApi()
     }
 }
+
+
+// Add this new UseCase to your WorkoutUseCases.kt file
+
+/**
+ * Use case for deleting a workout plan.
+ */
+@Singleton
+class DeleteWorkoutPlanUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    /**
+     * @param planId The ID of the plan to be deleted.
+     * @return A Result indicating success or failure.
+     */
+    suspend operator fun invoke(planId: String): Result<Unit> {
+        return repository.deleteWorkoutPlan(planId)
+    }
+}

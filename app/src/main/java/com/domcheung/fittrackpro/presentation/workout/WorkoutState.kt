@@ -1,5 +1,7 @@
 package com.domcheung.fittrackpro.presentation.workout
 
+import com.domcheung.fittrackpro.data.model.WorkoutPlan
+
 /**
  * UI State for the Workout screen.
  * Holds all the state information required by the WorkoutScreen composable,
@@ -16,7 +18,8 @@ data class WorkoutUiState(
     val workoutStarted: Boolean = false,
     val planCopied: Boolean = false,
     val startedSessionId: String? = null,
-    val copiedPlanId: String? = null
+    val copiedPlanId: String? = null,
+    val planToDelete: WorkoutPlan? = null
 ) {
     /**
      * A computed property to easily check if any background operation is in progress.

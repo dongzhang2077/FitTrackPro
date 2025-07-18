@@ -104,12 +104,21 @@ fun WorkoutScreen(
                         plans = filteredPlans,
                         onStartWorkout = { planId -> viewModel.startWorkout(planId) },
                         onCopyPlan = { planId, newName -> viewModel.copyWorkoutPlan(planId, newName) },
+                        onDeletePlan = { plan -> viewModel.onDeletePlanClicked(plan) },
                         onCreatePlanClick = onNavigateToCreatePlan,
                         isLoading = uiState.isAnyOperationInProgress
                     )
                 }
             }
         }
+    }
+
+    uiState.planToDelete?.let { plan ->
+        DeleteConfirmationDialog(
+            planName = plan.name,
+            onConfirm = { viewModel.confirmDeletePlan() },
+            onDismiss = { viewModel.cancelDeletePlan() }
+        )
     }
 
 }
@@ -338,22 +347,26 @@ private fun EmptyPlansContent(
     }
 }
 
+
 @Composable
 private fun WorkoutPlansContent(
     plans: List<WorkoutPlan>,
     onStartWorkout: (String) -> Unit,
     onCopyPlan: (String, String) -> Unit,
+    onDeletePlan: (WorkoutPlan) -> Unit, // <<<--- 1. Add the new event handler parameter
     onCreatePlanClick: () -> Unit,
     isLoading: Boolean
 ) {
     LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 80.dp) // Add padding to avoid FAB overlap
     ) {
         items(plans) { plan ->
             WorkoutPlanCard(
                 plan = plan,
                 onStartClick = { onStartWorkout(plan.id) },
                 onCopyClick = { newName -> onCopyPlan(plan.id, newName) },
+                onDeleteClick = { onDeletePlan(plan) }, // <<<--- 2. Pass the delete event down
                 isLoading = isLoading
             )
         }
@@ -373,6 +386,7 @@ private fun WorkoutPlanCard(
     plan: WorkoutPlan,
     onStartClick: () -> Unit,
     onCopyClick: (String) -> Unit,
+    onDeleteClick: () -> Unit,
     isLoading: Boolean
 ) {
     var showCopyDialog by remember { mutableStateOf(false) }
@@ -433,6 +447,20 @@ private fun WorkoutPlanCard(
                             },
                             leadingIcon = {
                                 Icon(Icons.Default.ContentCopy, contentDescription = null)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete Plan", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                onDeleteClick() // Call the new event handler
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
                             }
                         )
                     }
@@ -628,6 +656,38 @@ private fun CopyPlanDialog(
                 enabled = newName.isNotBlank()
             ) {
                 Text("Copy")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+/**
+ * A confirmation dialog for deleting a workout plan.
+ * @param planName The name of the plan to be deleted, shown in the dialog text.
+ * @param onConfirm Lambda executed when the user confirms the deletion.
+ * @param onDismiss Lambda executed when the user cancels or dismisses the dialog.
+ */
+@Composable
+private fun DeleteConfirmationDialog(
+    planName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete Plan") },
+        text = { Text("Are you sure you want to delete '$planName'? This action cannot be undone.") },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Delete")
             }
         },
         dismissButton = {

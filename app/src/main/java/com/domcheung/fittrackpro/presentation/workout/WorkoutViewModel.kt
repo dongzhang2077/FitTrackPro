@@ -24,7 +24,8 @@ class WorkoutViewModel @Inject constructor(
     private val startWorkoutSessionUseCase: StartWorkoutSessionUseCase,
     private val getActiveWorkoutSessionUseCase: GetActiveWorkoutSessionUseCase,
     private val authRepository: AuthRepository,
-    private val workoutRepository: WorkoutRepository
+    private val workoutRepository: WorkoutRepository,
+    private val deleteWorkoutPlanUseCase: DeleteWorkoutPlanUseCase
 ) : ViewModel() {
 
     // Internal mutable state for the UI
@@ -205,5 +206,36 @@ class WorkoutViewModel @Inject constructor(
             startedSessionId = null,
             copiedPlanId = null
         )
+    }
+
+    /**
+     * Called when the user clicks the 'Delete' option in the menu.
+     * It sets the state to show the confirmation dialog.
+     * @param plan The workout plan to be considered for deletion.
+     */
+    fun onDeletePlanClicked(plan: WorkoutPlan) {
+        _uiState.update { it.copy(planToDelete = plan) }
+    }
+
+    /**
+     * Called when the user confirms the deletion in the dialog.
+     * It triggers the UseCase to delete the plan and then hides the dialog.
+     */
+    fun confirmDeletePlan() {
+        viewModelScope.launch {
+            _uiState.value.planToDelete?.let { plan ->
+                deleteWorkoutPlanUseCase(plan.id)
+                // After deletion, hide the dialog by clearing the state.
+                _uiState.update { it.copy(planToDelete = null) }
+            }
+        }
+    }
+
+    /**
+     * Called when the user cancels the deletion in the dialog.
+     * It simply hides the dialog by clearing the state.
+     */
+    fun cancelDeletePlan() {
+        _uiState.update { it.copy(planToDelete = null) }
     }
 }
