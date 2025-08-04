@@ -2,12 +2,12 @@ package com.domcheung.fittrackpro.presentation.plan_builder
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.domcheung.fittrackpro.data.model.Exercise
 import com.domcheung.fittrackpro.data.model.PlannedExercise
 import com.domcheung.fittrackpro.data.model.PlannedSet
 import com.domcheung.fittrackpro.data.model.WorkoutPlan
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import com.domcheung.fittrackpro.domain.usecase.CreateWorkoutPlanUseCase
+import com.domcheung.fittrackpro.domain.usecase.GetExercisesByIdsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
