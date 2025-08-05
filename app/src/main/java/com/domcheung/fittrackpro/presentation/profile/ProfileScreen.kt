@@ -2,13 +2,44 @@ package com.domcheung.fittrackpro.presentation.profile
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -483,59 +514,7 @@ private fun SettingsSection(
     isSigningOut: Boolean
 ) {
     val settingsSections = listOf(
-        "Account Settings" to listOf(
-            SettingItem(
-                icon = Icons.Default.Edit,
-                title = "Edit Profile",
-                subtitle = "Update your personal information",
-                onClick = { /* TODO: Navigate to edit profile */ }
-            ),
-            SettingItem(
-                icon = Icons.Default.Lock,
-                title = "Change Password",
-                subtitle = "Update your account password",
-                onClick = { /* TODO: Navigate to change password */ }
-            ),
-            SettingItem(
-                icon = Icons.Default.Notifications,
-                title = "Notifications",
-                subtitle = "Manage workout reminders",
-                onClick = { /* TODO: Navigate to notification settings */ }
-            )
-        ),
-        "Fitness Settings" to listOf(
-            SettingItem(
-                icon = Icons.Default.TrackChanges,
-                title = "Goal Management",
-                subtitle = "Set and update your fitness goals",
-                onClick = { /* TODO: Navigate to goal settings */ }
-            ),
-            SettingItem(
-                icon = Icons.Default.Schedule,
-                title = "Workout Schedule",
-                subtitle = "Customize your training schedule",
-                onClick = { /* TODO: Navigate to schedule settings */ }
-            ),
-            SettingItem(
-                icon = Icons.Default.Analytics,
-                title = "Progress Tracking",
-                subtitle = "Configure measurement preferences",
-                onClick = { /* TODO: Navigate to tracking settings */ }
-            )
-        ),
         "App Settings" to listOf(
-            SettingItem(
-                icon = Icons.Default.Palette,
-                title = "Theme Settings",
-                subtitle = "Choose your preferred theme",
-                onClick = { /* TODO: Navigate to theme settings */ }
-            ),
-            SettingItem(
-                icon = Icons.Default.Storage,
-                title = "Data Export",
-                subtitle = "Export your workout data",
-                onClick = { /* TODO: Implement data export */ }
-            ),
             SettingItem(
                 icon = Icons.Default.Help,
                 title = "Help & Support",
@@ -575,6 +554,100 @@ private fun SettingsSection(
             isSigningOut = isSigningOut
         )
     }
+
+//    val settingsSections = listOf(
+//        "Account Settings" to listOf(
+//            SettingItem(
+//                icon = Icons.Default.Edit,
+//                title = "Edit Profile",
+//                subtitle = "Update your personal information",
+//                onClick = { /* TODO: Navigate to edit profile */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Lock,
+//                title = "Change Password",
+//                subtitle = "Update your account password",
+//                onClick = { /* TODO: Navigate to change password */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Notifications,
+//                title = "Notifications",
+//                subtitle = "Manage workout reminders",
+//                onClick = { /* TODO: Navigate to notification settings */ }
+//            )
+//        ),
+//        "Fitness Settings" to listOf(
+//            SettingItem(
+//                icon = Icons.Default.TrackChanges,
+//                title = "Goal Management",
+//                subtitle = "Set and update your fitness goals",
+//                onClick = { /* TODO: Navigate to goal settings */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Schedule,
+//                title = "Workout Schedule",
+//                subtitle = "Customize your training schedule",
+//                onClick = { /* TODO: Navigate to schedule settings */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Analytics,
+//                title = "Progress Tracking",
+//                subtitle = "Configure measurement preferences",
+//                onClick = { /* TODO: Navigate to tracking settings */ }
+//            )
+//        ),
+//        "App Settings" to listOf(
+//            SettingItem(
+//                icon = Icons.Default.Palette,
+//                title = "Theme Settings",
+//                subtitle = "Choose your preferred theme",
+//                onClick = { /* TODO: Navigate to theme settings */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Storage,
+//                title = "Data Export",
+//                subtitle = "Export your workout data",
+//                onClick = { /* TODO: Implement data export */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Help,
+//                title = "Help & Support",
+//                subtitle = "Get help and contact support",
+//                onClick = { /* TODO: Navigate to help */ }
+//            ),
+//            SettingItem(
+//                icon = Icons.Default.Info,
+//                title = "About FitTrack Pro",
+//                subtitle = "App version and information",
+//                onClick = { /* TODO: Show about dialog */ }
+//            )
+//        )
+//    )
+//
+//    Column(
+//        verticalArrangement = Arrangement.spacedBy(16.dp)
+//    ) {
+//        settingsSections.forEach { (sectionTitle, items) ->
+//            SettingsSectionCard(
+//                title = sectionTitle,
+//                items = items
+//            )
+//        }
+//
+//        // Data sync card (if needed)
+//        if (hasUnsyncedData) {
+//            SyncDataCard(
+//                onSyncClick = onSyncClick,
+//                isSyncing = isSyncing
+//            )
+//        }
+//
+//        // Sign out button (separate and prominent)
+//        SignOutCard(
+//            onSignOut = onSignOutClick,
+//            isSigningOut = isSigningOut
+//        )
+//    }
 }
 
 @Composable

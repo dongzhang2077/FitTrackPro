@@ -1,10 +1,22 @@
 package com.domcheung.fittrackpro.data.repository
 
-import com.domcheung.fittrackpro.data.local.dao.*
-import com.domcheung.fittrackpro.data.model.*
+import com.domcheung.fittrackpro.data.local.dao.ExerciseDao
+import com.domcheung.fittrackpro.data.local.dao.PersonalRecordDao
+import com.domcheung.fittrackpro.data.local.dao.WorkoutPlanDao
+import com.domcheung.fittrackpro.data.local.dao.WorkoutSessionDao
+import com.domcheung.fittrackpro.data.model.ExecutedExercise
+import com.domcheung.fittrackpro.data.model.Exercise
+import com.domcheung.fittrackpro.data.model.PersonalRecord
+import com.domcheung.fittrackpro.data.model.PlannedExercise
+import com.domcheung.fittrackpro.data.model.PlannedSet
+import com.domcheung.fittrackpro.data.model.RecordType
+import com.domcheung.fittrackpro.data.model.WorkoutPlan
+import com.domcheung.fittrackpro.data.model.WorkoutSession
+import com.domcheung.fittrackpro.data.model.WorkoutStatus
+import com.domcheung.fittrackpro.data.remote.WgerApiService
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
-import java.util.*
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +31,8 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val workoutPlanDao: WorkoutPlanDao,
     private val workoutSessionDao: WorkoutSessionDao,
     private val personalRecordDao: PersonalRecordDao,
-    private val firestore: FirebaseFirestore
+    private val firestore: FirebaseFirestore,
+    private val wgerApiService: WgerApiService
 ) : WorkoutRepository {
 
     // ========== Exercise Operations ==========
@@ -82,16 +95,25 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun syncExercisesFromApi(): Result<Unit> {
         return try {
-            // TODO: Implement Wger API integration
-            // For now, insert some sample exercises if database is empty
-            val existingCount = exerciseDao.getExerciseCount()
-            if (existingCount == 0) {
-                val sampleExercises = createSampleExercises()
-                exerciseDao.insertExercises(sampleExercises)
-            }
+            // We directly call the fallback logic to ensure data exists.
+            // The network call is completely bypassed for this version.
+            createSampleExercisesIfEmpty()
             Result.success(Unit)
         } catch (e: Exception) {
+            e.printStackTrace()
             Result.failure(e)
+        }
+    }
+
+    private suspend fun createSampleExercisesIfEmpty() {
+        println("SYNC_DEBUG: createSampleExercisesIfEmpty function called.")
+        if (exerciseDao.getExerciseCount() == 0) {
+            println("SYNC_DEBUG: DB is still empty, creating 3 sample exercises.")
+            val sampleExercises = createSampleExercises()
+            exerciseDao.insertExercises(sampleExercises)
+            println("SYNC_DEBUG: Finished inserting sample exercises.")
+        } else {
+            println("SYNC_DEBUG: DB was not empty, skipping sample creation.")
         }
     }
 

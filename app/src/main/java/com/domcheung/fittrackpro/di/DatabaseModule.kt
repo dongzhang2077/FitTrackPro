@@ -3,7 +3,11 @@ package com.domcheung.fittrackpro.di
 import android.content.Context
 import androidx.room.Room
 import com.domcheung.fittrackpro.data.local.AppDatabase
-import com.domcheung.fittrackpro.data.local.dao.*
+import com.domcheung.fittrackpro.data.local.dao.ExerciseDao
+import com.domcheung.fittrackpro.data.local.dao.PersonalRecordDao
+import com.domcheung.fittrackpro.data.local.dao.WorkoutPlanDao
+import com.domcheung.fittrackpro.data.local.dao.WorkoutSessionDao
+import com.domcheung.fittrackpro.data.remote.WgerApiService
 import com.domcheung.fittrackpro.data.repository.WorkoutRepository
 import com.domcheung.fittrackpro.data.repository.WorkoutRepositoryImpl
 import com.google.firebase.firestore.FirebaseFirestore
@@ -96,14 +100,16 @@ object DatabaseModule {
         workoutPlanDao: WorkoutPlanDao,
         workoutSessionDao: WorkoutSessionDao,
         personalRecordDao: PersonalRecordDao,
-        firestore: FirebaseFirestore
+        firestore: FirebaseFirestore,
+        wgerApiService: WgerApiService
     ): WorkoutRepository {
         return WorkoutRepositoryImpl(
             exerciseDao = exerciseDao,
             workoutPlanDao = workoutPlanDao,
             workoutSessionDao = workoutSessionDao,
             personalRecordDao = personalRecordDao,
-            firestore = firestore
+            firestore = firestore,
+            wgerApiService = wgerApiService
         )
     }
 }

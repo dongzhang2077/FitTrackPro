@@ -3,9 +3,10 @@ package com.domcheung.fittrackpro.presentation.splash
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.repository.AuthRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import com.domcheung.fittrackpro.domain.usecase.SyncExercisesUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -30,34 +31,35 @@ class SplashViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SplashUiState())
     val uiState: StateFlow<SplashUiState> = _uiState
 
-    fun checkLoginState() {
+    // The init block is automatically executed when the ViewModel is created.
+    init {
+        // Start the entire app initialization process from here.
+        initializeApp()
+    }
+
+    /**
+     * This is the single entry point for app initialization.
+     * It runs automatically when the ViewModel is created.
+     */
+    private fun initializeApp() {
         viewModelScope.launch {
             try {
-                println("DEBUG: Checking login state...")
+                // Ensure the splash screen is visible for at least 2 seconds for branding.
+                delay(2000)
 
-                // --- NEW LOGIC: Seed exercises first ---
-                // Ensure sample exercises exist before proceeding.
+                // First, perform the critical data sync/seed operation.
                 syncExercisesUseCase()
-                println("DEBUG: Exercise sync/seed completed.")
 
-                // Use full login state check
+                // After syncing, check if the user is already logged in.
                 val isLoggedIn = authRepository.checkInitialLoginState()
 
-                println("DEBUG: Login check result: $isLoggedIn")
-
+                // Finally, update the state to trigger navigation.
                 _uiState.value = SplashUiState(
                     isLoading = false,
-                    navigationTarget = if (isLoggedIn) {
-                        println("DEBUG: Navigating to MAIN")
-                        NavigationTarget.MAIN
-                    } else {
-                        println("DEBUG: Navigating to LOGIN")
-                        NavigationTarget.LOGIN
-                    }
+                    navigationTarget = if (isLoggedIn) NavigationTarget.MAIN else NavigationTarget.LOGIN
                 )
             } catch (e: Exception) {
-                println("DEBUG: Error checking login state: ${e.message}")
-                // If there's an error, default to login screen
+                // If anything fails (sync or auth check), navigate to login as a safe fallback.
                 _uiState.value = SplashUiState(
                     isLoading = false,
                     navigationTarget = NavigationTarget.LOGIN

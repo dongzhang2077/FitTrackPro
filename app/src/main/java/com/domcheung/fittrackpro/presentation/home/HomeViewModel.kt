@@ -2,16 +2,30 @@ package com.domcheung.fittrackpro.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.model.PersonalRecord
 import com.domcheung.fittrackpro.data.model.WorkoutPlan
+import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import com.domcheung.fittrackpro.data.repository.WorkoutStatistics
-import com.domcheung.fittrackpro.domain.usecase.*
+import com.domcheung.fittrackpro.domain.usecase.GetActiveWorkoutSessionUseCase
+import com.domcheung.fittrackpro.domain.usecase.GetPersonalRecordsUseCase
+import com.domcheung.fittrackpro.domain.usecase.GetUserWorkoutPlansUseCase
+import com.domcheung.fittrackpro.domain.usecase.GetWorkoutStatisticsUseCase
+import com.domcheung.fittrackpro.domain.usecase.StartWorkoutSessionUseCase
+import com.domcheung.fittrackpro.domain.usecase.SyncDataUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.*
+import java.util.Calendar
 import javax.inject.Inject
 
 /**
@@ -176,9 +190,8 @@ class HomeViewModel @Inject constructor(
 
         val recommendedPlan = getTodaysRecommendedPlan()
         if (recommendedPlan == null) {
-            _uiState.value = _uiState.value.copy(
-                errorMessage = "No workout plans available. Create a plan first."
-            )
+            // If no plan is available, set the state to trigger navigation to the Workout tab.
+            _uiState.update { it.copy(navigateToWorkoutTab = true) }
             return
         }
 
@@ -289,7 +302,8 @@ class HomeViewModel @Inject constructor(
             workoutResumed = false,
             syncCompleted = false,
             startedSessionId = null,
-            resumedSessionId = null
+            resumedSessionId = null,
+            navigateToWorkoutTab = false
         )
     }
 
@@ -381,7 +395,8 @@ data class HomeUiState(
     val workoutResumed: Boolean = false,
     val syncCompleted: Boolean = false,
     val startedSessionId: String? = null,
-    val resumedSessionId: String? = null
+    val resumedSessionId: String? = null,
+    val navigateToWorkoutTab: Boolean = false
 ) {
     val isAnyOperationInProgress: Boolean
         get() = isLoading || isStartingWorkout || isSyncing
