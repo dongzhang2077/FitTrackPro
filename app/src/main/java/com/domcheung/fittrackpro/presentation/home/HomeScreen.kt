@@ -62,6 +62,8 @@ fun HomeScreen(
     val activeWorkoutSession by viewModel.activeWorkoutSession.collectAsState(initial = null)
     val displayName by viewModel.displayName.collectAsState()
     val storedWeeklyGoal by viewModel.weeklyWorkoutGoal.collectAsState()
+    val weeklyWorkoutCount by viewModel.weeklyWorkoutCount.collectAsState()
+    val weeklyProgress by viewModel.weeklyProgress.collectAsState()
     
     // State for weekly goal dialog
     var showWeeklyGoalDialog by remember { mutableStateOf(false) }
@@ -147,9 +149,9 @@ fun HomeScreen(
         )
 
         WeeklyOverviewCard(
-            weeklyProgress = viewModel.getWeeklyProgress(),
+            weeklyProgress = weeklyProgress,
             currentStreak = viewModel.getCurrentStreak(),
-            thisWeekWorkouts = viewModel.getThisWeekWorkoutCount(),
+            thisWeekWorkouts = weeklyWorkoutCount,
             weeklyGoal = storedWeeklyGoal,
             isLoading = uiState.isLoading,
             onEditWeeklyGoal = {
@@ -605,7 +607,7 @@ private fun WeeklyOverviewCard(
                     )
 
                     WeeklyStatItem(
-                        label = "Streak (days)",
+                        label = "Streak (weeks)",
                         value = "$currentStreak",
                         color = MaterialTheme.colorScheme.secondary
                     )

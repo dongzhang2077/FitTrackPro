@@ -8,6 +8,7 @@ import com.domcheung.fittrackpro.domain.usecase.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @HiltViewModel
@@ -19,7 +20,8 @@ class HomeViewModel @Inject constructor(
     private val getTodaysRecommendedPlanUseCase: GetTodaysRecommendedPlanUseCase,
     private val startWorkoutSessionUseCase: StartWorkoutSessionUseCase,
     private val resumeWorkoutSessionUseCase: ResumeWorkoutSessionUseCase,
-    private val getWeeklyWorkoutSummaryUseCase: GetWeeklyWorkoutSummaryUseCase
+    private val getWeeklyWorkoutSummaryUseCase: GetWeeklyWorkoutSummaryUseCase,
+    private val getWeeklyStreakUseCase: GetWeeklyStreakUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -75,6 +77,16 @@ class HomeViewModel @Inject constructor(
             emit(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Reactive weekly workout count
+    val weeklyWorkoutCount = weeklyActivity.map { activity ->
+        activity.count { it.isCompleted }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    // Reactive weekly progress percentage
+    val weeklyProgress = weeklyWorkoutCount.combine(weeklyWorkoutGoal) { count, goal ->
+        if (goal > 0) (count.toFloat() / goal.toFloat()) * 100f else 0f
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 
     fun getUserDisplayName(): String {
         return displayName.value
@@ -155,17 +167,21 @@ class HomeViewModel @Inject constructor(
     suspend fun getTodaysRecommendedPlan() = getTodaysRecommendedPlanUseCase(authRepository.getCurrentUser()?.uid ?: "")
 
     fun getWeeklyProgress(): Float {
-        val completed = getThisWeekWorkoutCount()
-        val goal = weeklyWorkoutGoal.value.toFloat()
-        return if (goal > 0) (completed.toFloat() / goal) * 100f else 0f
+        return weeklyProgress.value
     }
 
     fun getCurrentStreak(): Int {
-        return workoutStatistics.value?.currentStreak ?: 0
+        val userId = authRepository.getCurrentUser()?.uid ?: return 0
+        val weeklyGoal = weeklyWorkoutGoal.value
+
+        // Use coroutine to get the weekly streak
+        return runBlocking {
+            getWeeklyStreakUseCase(userId, weeklyGoal)
+        }
     }
 
     fun getThisWeekWorkoutCount(): Int {
-        return weeklyActivity.value.count { it.isCompleted }
+        return weeklyWorkoutCount.value
     }
 
     fun getWeeklyGoal(): Int {
