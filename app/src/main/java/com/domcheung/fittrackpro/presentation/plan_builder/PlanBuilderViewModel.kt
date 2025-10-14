@@ -143,7 +143,7 @@ class PlanBuilderViewModel @Inject constructor(
             exerciseName = exercise.name,
             orderIndex = _uiState.value.exercises.size,
             // Add one default set when a new exercise is added.
-            sets = listOf(com.domcheung.fittrackpro.data.model.PlannedSet(1, 20f, 10))
+            sets = listOf(com.domcheung.fittrackpro.data.model.PlannedSet(setNumber = 1, targetWeight = 20f, targetReps = 10))
         )
         _uiState.update {
             it.copy(exercises = it.exercises + newPlannedExercise)
@@ -163,6 +163,12 @@ class PlanBuilderViewModel @Inject constructor(
         }
     }
 
+    fun removeExerciseById(exerciseId: Int) {
+        _uiState.update {
+            it.copy(exercises = it.exercises.filterNot { exercise -> exercise.exerciseId == exerciseId })
+        }
+    }
+
     /**
      * Adds a new set to a specific exercise in the plan.
      * It copies the details from the last existing set.
@@ -174,7 +180,7 @@ class PlanBuilderViewModel @Inject constructor(
             val exercise = exercises.getOrNull(exerciseIndex) ?: return@update it
 
             val sets = exercise.sets.toMutableList()
-            val lastSet = sets.lastOrNull() ?: com.domcheung.fittrackpro.data.model.PlannedSet(0, 20f, 10)
+            val lastSet = sets.lastOrNull() ?: com.domcheung.fittrackpro.data.model.PlannedSet(setNumber = 0, targetWeight = 20f, targetReps = 10)
 
             // Create a new set by copying the last one.
             sets.add(lastSet.copy(setNumber = sets.size + 1))
@@ -226,5 +232,14 @@ class PlanBuilderViewModel @Inject constructor(
             }
         }
     }
-}
 
+    fun onExerciseClicked(exerciseId: Int) {
+        _uiState.update {
+            if (it.expandedExerciseId == exerciseId) {
+                it.copy(expandedExerciseId = null)
+            } else {
+                it.copy(expandedExerciseId = exerciseId)
+            }
+        }
+    }
+}

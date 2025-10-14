@@ -78,7 +78,8 @@ data class WorkoutSession(
     val completionPercentage: Float = 0f, // Completion percentage
     val notes: String = "",         // Session notes
     val createdAt: Long = System.currentTimeMillis(),
-    val syncedToFirebase: Boolean = false // Firebase sync status
+    val syncedToFirebase: Boolean = false, // Firebase sync status
+    val isPlanModified: Boolean = false
 )
 
 /**
@@ -116,7 +117,9 @@ data class PlannedExercise(
     val orderIndex: Int,            // Order in the plan
     val sets: List<PlannedSet>,     // Planned sets
     val restBetweenSets: Int = 90,  // Rest time between sets (seconds)
-    val notes: String = ""          // Exercise-specific notes
+    val notes: String = "",        // Exercise-specific notes
+    val imageUrl: String? = null,   // URL for exercise image
+    val videoUrl: String? = null    // URL for exercise video
 )
 
 /**
@@ -127,7 +130,7 @@ data class PlannedSet(
     val setNumber: Int,             // Set number (1, 2, 3...)
     val targetWeight: Float,        // Target weight (kg)
     val targetReps: Int,            // Target repetitions
-    val targetRpe: Float? = null,   // Target RPE (Rate of Perceived Exertion)
+    val targetRpe: Float? = null,   // Target RPE (Rate of Perceived Exemption)
     val restAfter: Int = 90         // Rest time after this set (seconds)
 )
 
@@ -147,7 +150,9 @@ data class ExecutedExercise(
     val isCompleted: Boolean = false, // Is exercise fully completed
     val isReplaced: Boolean = false,  // Was this exercise replaced
     val replacedFromId: Int? = null,  // Original exercise ID if replaced
-    val notes: String = ""          // Exercise notes
+    val notes: String = "",          // Exercise notes
+    val imageUrl: String? = null,   // URL for exercise image
+    val videoUrl: String? = null    // URL for exercise video
 )
 
 /**
@@ -157,15 +162,15 @@ data class ExecutedExercise(
 data class ExecutedSet(
     val setNumber: Int,             // Set number
     val plannedWeight: Float,       // Originally planned weight
-    val plannedReps: Int,           // Originally planned reps
-    val actualWeight: Float,        // Actually used weight
-    val actualReps: Int,            // Actually completed reps
-    val actualRpe: Float? = null,   // Actual RPE
-    val restAfter: Int = 90,        // Rest time after this set
-    val completedAt: Long? = null,  // Completion timestamp
-    val isCompleted: Boolean = false, // Is set completed
-    val isSkipped: Boolean = false, // Was set skipped
-    val notes: String = ""          // Set-specific notes
+    val plannedReps: Int,
+    val actualWeight: Float,
+    val actualReps: Int,
+    val actualRpe: Float? = null,
+    val restAfter: Int = 90,
+    val completedAt: Long? = null,
+    val isCompleted: Boolean = false,
+    val isSkipped: Boolean = false,
+    val notes: String = ""
 )
 
 // ========== Enums ==========
@@ -216,7 +221,7 @@ class Converters {
     fun toStringList(value: String): List<String> {
         return try {
             Gson().fromJson<List<String>>(value, object : TypeToken<List<String>>() {}.type) ?: emptyList()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -230,7 +235,7 @@ class Converters {
     fun toPlannedExerciseList(value: String): List<PlannedExercise> {
         return try {
             Gson().fromJson<List<PlannedExercise>>(value, object : TypeToken<List<PlannedExercise>>() {}.type) ?: emptyList()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -244,7 +249,7 @@ class Converters {
     fun toExecutedExerciseList(value: String): List<ExecutedExercise> {
         return try {
             Gson().fromJson<List<ExecutedExercise>>(value, object : TypeToken<List<ExecutedExercise>>() {}.type) ?: emptyList()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             emptyList()
         }
     }
@@ -258,7 +263,7 @@ class Converters {
     fun toWorkoutPlan(value: String): WorkoutPlan {
         return try {
             Gson().fromJson(value, WorkoutPlan::class.java)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             WorkoutPlan(id = "", name = "")
         }
     }
@@ -272,7 +277,7 @@ class Converters {
     fun toWorkoutStatus(value: String): WorkoutStatus {
         return try {
             WorkoutStatus.valueOf(value)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             WorkoutStatus.NOT_STARTED
         }
     }
@@ -286,7 +291,7 @@ class Converters {
     fun toRecordType(value: String): RecordType {
         return try {
             RecordType.valueOf(value)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             RecordType.MAX_WEIGHT
         }
     }

@@ -16,76 +16,28 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Light theme color scheme - our main FitTrack Pro theme
+// Updated light theme color scheme based on the style guide
 private val FitTrackLightColorScheme = lightColorScheme(
-    // Primary colors
-    primary = FitTrackPrimary,
-    onPrimary = Color.White,
-    primaryContainer = FitTrackPrimaryAlpha12,
-    onPrimaryContainer = FitTrackOnSurface,
-
-    // Secondary colors
-    secondary = FitTrackSecondary,
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFF0E6D6), // Light milk tea
-    onSecondaryContainer = FitTrackOnSurface,
-
-    // Tertiary colors
-    tertiary = FitTrackTertiary,
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFE8F4F5), // Light misty blue
-    onTertiaryContainer = FitTrackOnSurface,
-
-    // Background colors
-    background = FitTrackBackground,
-    onBackground = FitTrackOnSurface,
-
-    // Surface colors
-    surface = FitTrackSurface,
-    onSurface = FitTrackOnSurface,
-    surfaceVariant = Color(0xFFF5F5F5),
-    onSurfaceVariant = FitTrackOnSurfaceVariant,
-
-    // Error colors
-    error = FitTrackError,
-    onError = Color.White,
-    errorContainer = Color(0xFFFFEBEE),
-    onErrorContainer = Color(0xFFB71C1C),
-
-    // Outline colors
-    outline = Color(0xFFE0E0E0),
-    outlineVariant = Color(0xFFF0F0F0)
+    primary = Color(0xFFD7819A),
+    secondary = Color(0xFFC8AD7F),
+    tertiary = Color(0xFFA8DADC),
+    surface = Color(0xFFF8F9FA),
+    background = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF2D2D2D),
+    onSurfaceVariant = Color(0xFF666666),
+    error = Color(0xFFF44336)
 )
 
 // Dark theme color scheme - for future implementation
 private val FitTrackDarkColorScheme = darkColorScheme(
-    primary = FitTrackDarkPrimary,
-    onPrimary = Color.Black,
-    primaryContainer = Color(0xFF4A2C3A),
-    onPrimaryContainer = FitTrackDarkOnSurface,
-
-    secondary = Color(0xFFD4C4A0),
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF4A4134),
-    onSecondaryContainer = FitTrackDarkOnSurface,
-
-    tertiary = Color(0xFFB8E6E8),
-    onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF2F4A4B),
-    onTertiaryContainer = FitTrackDarkOnSurface,
-
+    primary = Color(0xFFD7819A),
+    secondary = Color(0xFFC8AD7F),
+    tertiary = Color(0xFFA8DADC),
+    surface = Color(0xFF2D2D2D),
     background = Color(0xFF121212),
-    onBackground = FitTrackDarkOnSurface,
-
-    surface = FitTrackDarkSurface,
-    onSurface = FitTrackDarkOnSurface,
-    surfaceVariant = Color(0xFF2C2C2C),
-    onSurfaceVariant = Color(0xFFB0B0B0),
-
-    error = Color(0xFFEF5350),
-    onError = Color.Black,
-    errorContainer = Color(0xFF4E1D1D),
-    onErrorContainer = Color(0xFFFFCDD2)
+    onSurface = Color(0xFFF8F9FA),
+    onSurfaceVariant = Color(0xFFCCCCCC),
+    error = Color(0xFFEF5350)
 )
 
 @Composable
@@ -117,7 +69,7 @@ fun FitTrackProTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = FitTrackTypography,
-        shapes = FitTrackShapes,
+        shapes = HandDrawnShapes,
         content = content
     )
 }

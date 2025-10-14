@@ -181,7 +181,7 @@ private fun ActiveWorkoutBanner(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.tertiaryContainer
         )
@@ -238,7 +238,7 @@ private fun LoadingContent() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp)
-                    .clip(HandDrawnShapes.cardVariant1),
+                    .clip(HandDrawnShapes.medium),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
@@ -394,7 +394,7 @@ private fun WorkoutPlanCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -578,7 +578,7 @@ private fun CreateNewPlanCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2)
+            .clip(HandDrawnShapes.medium)
             .then(
                 if (!isLoading) {
                     Modifier.clickable { onClick() }

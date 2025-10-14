@@ -61,7 +61,6 @@ fun MainTabScreen(
             ) { tab ->
                 when (tab) {
                     MainTab.HOME -> HomeScreen(
-                        onNavigateToWorkout = { selectedTab = MainTab.WORKOUT },
                         onNavigateToProgress = { selectedTab = MainTab.PROGRESS },
                         onNavigateToWorkoutSession = { sessionId ->
                             // Use the NavController to navigate to the session screen

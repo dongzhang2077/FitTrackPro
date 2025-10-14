@@ -1,8 +1,12 @@
 package com.domcheung.fittrackpro.data.local.dao
 
-import androidx.room.*
-import kotlinx.coroutines.flow.Flow
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import com.domcheung.fittrackpro.data.model.Exercise
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Data Access Object for Exercise entity
@@ -20,15 +24,21 @@ interface ExerciseDao {
     fun getAllExercises(): Flow<List<Exercise>>
 
     /**
+     * Get all exercises with images prioritized (images first, then alphabetically)
+     */
+    @Query("SELECT * FROM exercises ORDER BY CASE WHEN imageUrl IS NOT NULL THEN 0 ELSE 1 END, name ASC")
+    fun getAllExercisesPrioritizeImages(): Flow<List<Exercise>>
+
+    /**
      * Get exercises by muscle group category
      */
-    @Query("SELECT * FROM exercises WHERE category = :category ORDER BY name ASC")
+    @Query("SELECT * FROM exercises WHERE category = :category ORDER BY CASE WHEN imageUrl IS NOT NULL THEN 0 ELSE 1 END, name ASC")
     fun getExercisesByCategory(category: String): Flow<List<Exercise>>
 
     /**
-     * Search exercises by name (case insensitive)
+     * Search exercises by name (case insensitive) with images prioritized
      */
-    @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' ORDER BY name ASC")
+    @Query("SELECT * FROM exercises WHERE name LIKE '%' || :query || '%' ORDER BY CASE WHEN imageUrl IS NOT NULL THEN 0 ELSE 1 END, name ASC")
     fun searchExercises(query: String): Flow<List<Exercise>>
 
     /**

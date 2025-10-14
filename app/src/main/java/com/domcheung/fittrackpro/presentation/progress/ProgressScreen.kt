@@ -20,21 +20,19 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.domcheung.fittrackpro.data.model.PersonalRecord
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @Composable
 fun ProgressScreen(
     viewModel: ProgressViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val workoutStatistics by viewModel.workoutStatistics.collectAsState()
-    val personalRecords by viewModel.personalRecords.collectAsState()
-    val recentPersonalRecords by viewModel.recentPersonalRecords.collectAsState()
     val filteredData by viewModel.filteredData.collectAsState()
+    val weeklyGoal by viewModel.weeklyWorkoutGoal.collectAsState()
 
-    // Show error snackbar
     uiState.errorMessage?.let { errorMessage ->
         LaunchedEffect(errorMessage) {
-            // In a real app, you would show a SnackBar here
             viewModel.clearError()
         }
     }
@@ -45,12 +43,10 @@ fun ProgressScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Header
         item {
             ProgressHeader()
         }
 
-        // Time range selector
         item {
             TimeRangeSelector(
                 selectedRange = uiState.selectedTimeRange,
@@ -58,25 +54,32 @@ fun ProgressScreen(
             )
         }
 
-        // Weekly activity chart
         item {
-            WeeklyActivityCard(
-                weeklyData = viewModel.getWeeklyActivityData(),
-                isLoading = uiState.isLoading
-            )
+            when (uiState.selectedTimeRange) {
+                ProgressTimeRange.WEEK -> WeeklyActivityCard(
+                    weeklyData = filteredData.weeklyActivity,
+                    weeklyGoal = weeklyGoal,
+                    isLoading = uiState.isLoading
+                )
+                ProgressTimeRange.MONTH -> MonthlyProgressCard(
+                    monthlyData = filteredData.monthlyProgress,
+                    isLoading = uiState.isLoading
+                )
+                ProgressTimeRange.YEAR -> YearlyProgressCard(
+                    yearlyData = filteredData.yearlyProgress,
+                    isLoading = uiState.isLoading
+                )
+            }
         }
 
-        // Personal records section
         item {
             PersonalRecordsCard(
-                allRecords = personalRecords,
-                recentRecords = recentPersonalRecords,
-                topRecords = viewModel.getTopWeightRecords(),
+                personalRecords = filteredData.personalRecords,
+                recentPersonalRecords = filteredData.recentPersonalRecords,
                 isLoading = uiState.isLoading
             )
         }
 
-        // Achievement stats
         item {
             AchievementStatsCard(
                 achievementStats = viewModel.getAchievementStats(),
@@ -84,10 +87,9 @@ fun ProgressScreen(
             )
         }
 
-        // Workout statistics summary
         item {
             StatisticsSummaryCard(
-                statistics = workoutStatistics,
+                statistics = filteredData.statistics,
                 isLoading = uiState.isLoading
             )
         }
@@ -119,7 +121,7 @@ private fun TimeRangeSelector(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.actionCard),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -145,12 +147,13 @@ private fun TimeRangeSelector(
 @Composable
 private fun WeeklyActivityCard(
     weeklyData: List<WeeklyActivityData>,
+    weeklyGoal: Int,
     isLoading: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.progressCard),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -177,7 +180,6 @@ private fun WeeklyActivityCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
-                // Loading placeholder
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -192,7 +194,6 @@ private fun WeeklyActivityCard(
                     }
                 }
             } else {
-                // Weekly activity visualization
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -213,7 +214,7 @@ private fun WeeklyActivityCard(
                 val completedCount = weeklyData.count { it.isCompleted }
                 val totalDays = weeklyData.size
                 Text(
-                    text = "Completed: $completedCount/$totalDays this week",
+                    text = "Completed: $completedCount/$weeklyGoal this week",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -290,15 +291,14 @@ private fun WeeklyActivityItem(
 
 @Composable
 private fun PersonalRecordsCard(
-    allRecords: List<PersonalRecord>,
-    recentRecords: List<PersonalRecord>,
-    topRecords: List<PersonalRecord>,
+    personalRecords: List<PersonalRecord>,
+    recentPersonalRecords: List<PersonalRecord>,
     isLoading: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -325,7 +325,6 @@ private fun PersonalRecordsCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
-                // Loading placeholders
                 repeat(3) {
                     Box(
                         modifier = Modifier
@@ -336,8 +335,7 @@ private fun PersonalRecordsCard(
                     )
                     if (it < 2) Spacer(modifier = Modifier.height(8.dp))
                 }
-            } else if (topRecords.isEmpty()) {
-                // Empty state
+            } else if (personalRecords.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -363,18 +361,19 @@ private fun PersonalRecordsCard(
                     )
                 }
             } else {
-                // Show top records
-                topRecords.take(5).forEach { record ->
-                    PersonalRecordItem(record = record)
-                    if (record != topRecords.last()) {
-                        Spacer(modifier = Modifier.height(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    items(personalRecords) { record ->
+                        PersonalRecordItem(record = record)
                     }
                 }
 
-                if (recentRecords.isNotEmpty()) {
+                if (recentPersonalRecords.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "🔥 Recent achievements: ${recentRecords.size} in the last 30 days",
+                        text = "🔥 Recent achievements: ${recentPersonalRecords.size} in the last 30 days",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier.fillMaxWidth()
@@ -387,47 +386,50 @@ private fun PersonalRecordsCard(
 
 @Composable
 private fun PersonalRecordItem(record: PersonalRecord) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        modifier = Modifier.width(200.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
-        Column {
+        Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = record.exerciseName,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium
             )
             Text(
-                text = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                text = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                     .format(java.util.Date(record.achievedAt)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "${record.weight}kg × ${record.reps}",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Surface(
-                color = MaterialTheme.colorScheme.tertiaryContainer,
-                shape = MaterialTheme.shapes.small
+            Row(
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = record.recordType.name.replace("_", " "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    text = "${record.weight}kg × ${record.reps}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
                 )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Surface(
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = record.recordType.name.replace("_", " "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }
@@ -441,7 +443,7 @@ private fun AchievementStatsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
@@ -458,7 +460,6 @@ private fun AchievementStatsCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
-                // Loading placeholders
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -493,8 +494,8 @@ private fun AchievementStatsCard(
 
                     AchievementStatItem(
                         icon = Icons.Default.Timeline,
-                        value = "${achievementStats.averageCompletion.toInt()}%",
-                        label = "Completion",
+                        value = "${achievementStats.averageCompletion.toInt()}",
+                        label = "Completion (%)",
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -556,7 +557,7 @@ private fun StatisticsSummaryCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.progressCard),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -583,7 +584,6 @@ private fun StatisticsSummaryCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
-                // Loading placeholders
                 repeat(2) { row ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -601,7 +601,6 @@ private fun StatisticsSummaryCard(
                     if (row == 0) Spacer(modifier = Modifier.height(16.dp))
                 }
             } else if (statistics == null) {
-                // Empty state
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -627,7 +626,6 @@ private fun StatisticsSummaryCard(
                     )
                 }
             } else {
-                // First row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -639,28 +637,27 @@ private fun StatisticsSummaryCard(
                     )
 
                     StatisticItem(
-                        label = "Total Volume",
-                        value = "${(statistics.totalVolumeLifted / 1000).toInt()}k kg",
+                        label = "Total Volume (k kg)",
+                        value = "${(statistics.totalVolumeLifted / 1000).toInt()}",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Second row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     StatisticItem(
-                        label = "Avg Duration",
-                        value = "${(statistics.averageWorkoutDuration / 60000)}min",
+                        label = "Avg Duration (min)",
+                        value = "${(statistics.averageWorkoutDuration / 60000)}",
                         color = MaterialTheme.colorScheme.tertiary
                     )
 
                     StatisticItem(
-                        label = "Completion Rate",
-                        value = "${statistics.averageCompletionRate.toInt()}%",
+                        label = "Completion Rate (%)",
+                        value = "${statistics.averageCompletionRate.toInt()}",
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -690,5 +687,141 @@ private fun StatisticItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+    }
+}
+
+@Composable
+private fun MonthlyProgressCard(
+    monthlyData: List<MonthlyProgressData>,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.medium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.BarChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "📊 Monthly Progress",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    monthlyData.forEach { data ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .height((data.workoutCount * 10).dp)
+                                    .width(20.dp)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Text(text = data.month)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YearlyProgressCard(
+    yearlyData: List<MonthlyProgressData>,
+    isLoading: Boolean
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.medium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.StackedBarChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "📅 Yearly Progress",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    items(yearlyData) { data ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .height((data.workoutCount * 10).dp)
+                                    .width(20.dp)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Text(text = data.month)
+                        }
+                    }
+                }
+            }
+        }
     }
 }

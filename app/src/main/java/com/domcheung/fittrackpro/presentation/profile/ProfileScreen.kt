@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
@@ -40,6 +42,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,6 +53,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.presentation.profile.components.AvatarDialog
+import com.domcheung.fittrackpro.presentation.profile.components.EditNameDialog
+import com.domcheung.fittrackpro.presentation.profile.components.GoalSettingsDialog
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 
 @Composable
@@ -59,6 +67,18 @@ fun ProfileScreen(
     val userProfile by viewModel.userProfile.collectAsState()
     val workoutStatistics by viewModel.workoutStatistics.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+
+    // Dialog states
+    var showEditNameDialog by remember { mutableStateOf(false) }
+    var showAvatarDialog by remember { mutableStateOf(false) }
+    var showGoalSettingsDialog by remember { mutableStateOf(false) }
+
+    // Form states
+    var editingName by remember { mutableStateOf("") }
+    var avatarUrl by remember { mutableStateOf("") }
+    var currentWeight by remember { mutableStateOf("") }
+    var targetWeight by remember { mutableStateOf("") }
+    var initialWeight by remember { mutableStateOf("") }
 
     // Handle sign out completion
     LaunchedEffect(uiState.signOutCompleted) {
@@ -84,6 +104,18 @@ fun ProfileScreen(
         }
     }
 
+    // Show profile update completion message
+    LaunchedEffect(uiState.profileUpdated) {
+        if (uiState.profileUpdated) {
+            // Could show a success toast here
+            viewModel.clearEvents()
+            // Close dialogs after successful update
+            showEditNameDialog = false
+            showAvatarDialog = false
+            showGoalSettingsDialog = false
+        }
+    }
+
     if (!isLoggedIn) {
         // Show login required state
         NotLoggedInContent()
@@ -100,7 +132,15 @@ fun ProfileScreen(
         item {
             UserProfileHeader(
                 userProfile = userProfile,
-                isLoading = uiState.isLoading
+                isLoading = uiState.isLoading,
+                onEditName = {
+                    editingName = userProfile.name
+                    showEditNameDialog = true
+                },
+                onChangeAvatar = {
+                    avatarUrl = userProfile.avatarUrl
+                    showAvatarDialog = true
+                }
             )
         }
 
@@ -109,15 +149,13 @@ fun ProfileScreen(
             CurrentGoalsCard(
                 userProfile = userProfile,
                 goalProgress = viewModel.getGoalProgress(),
-                isLoading = uiState.isLoading
-            )
-        }
-
-        // Statistics card
-        item {
-            StatisticsCard(
-                statistics = viewModel.getStatisticsSummary(),
-                isLoading = uiState.isLoading
+                isLoading = uiState.isLoading,
+                onClick = {
+                    currentWeight = userProfile.currentWeight
+                    targetWeight = userProfile.targetWeight
+                    initialWeight = userProfile.initialWeight
+                    showGoalSettingsDialog = true
+                }
             )
         }
 
@@ -141,6 +179,49 @@ fun ProfileScreen(
                 viewModel.signOut()
             },
             onDismiss = { viewModel.hideSignOutDialog() }
+        )
+    }
+
+    // Edit name dialog
+    if (showEditNameDialog) {
+        EditNameDialog(
+            currentName = editingName,
+            onNameChange = { newName -> editingName = newName },
+            onDismiss = { showEditNameDialog = false },
+            onSave = {
+                viewModel.updateUserName(editingName)
+            },
+            isLoading = uiState.isUpdatingProfile
+        )
+    }
+
+    // Avatar dialog
+    if (showAvatarDialog) {
+        AvatarDialog(
+            currentAvatarData = avatarUrl,
+            onAvatarChange = { newAvatarData -> avatarUrl = newAvatarData },
+            onDismiss = { showAvatarDialog = false },
+            onSave = {
+                viewModel.updateUserAvatar(avatarUrl)
+            },
+            isLoading = uiState.isUpdatingProfile
+        )
+    }
+
+    // Goal settings dialog
+    if (showGoalSettingsDialog) {
+        GoalSettingsDialog(
+            currentWeight = currentWeight,
+            targetWeight = targetWeight,
+            initialWeight = initialWeight,
+            onCurrentWeightChange = { newWeight -> currentWeight = newWeight },
+            onTargetWeightChange = { newWeight -> targetWeight = newWeight },
+            onInitialWeightChange = { newWeight -> initialWeight = newWeight },
+            onDismiss = { showGoalSettingsDialog = false },
+            onSave = {
+                viewModel.updateWeightGoals(currentWeight, targetWeight, initialWeight)
+            },
+            isLoading = uiState.isUpdatingProfile
         )
     }
 
@@ -195,12 +276,14 @@ private fun NotLoggedInContent() {
 @Composable
 private fun UserProfileHeader(
     userProfile: UserProfileData,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onEditName: () -> Unit = {},
+    onChangeAvatar: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
@@ -211,25 +294,68 @@ private fun UserProfileHeader(
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Avatar placeholder
-            Surface(
-                modifier = Modifier.size(80.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
+            // Avatar (clickable to change)
+            Box(
+                modifier = Modifier.size(96.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { onChangeAvatar() },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    tonalElevation = 4.dp,
+                    shadowElevation = 4.dp
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Profile Picture",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(40.dp)
-                    )
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (userProfile.avatarUrl.isNotBlank()) {
+                            if (userProfile.avatarUrl.contains(":")) {
+                                val parts = userProfile.avatarUrl.split(":")
+                                if (parts.size >= 2) {
+                                    Text(
+                                        text = parts[1],
+                                        fontSize = MaterialTheme.typography.displayMedium.fontSize
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Profile Picture",
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile Picture",
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.size(40.dp)
+                                )
+                            }
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = "Profile Picture (click to change)",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
                 }
+
+                EditOverlayIcon(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp),
+                    onClick = onChangeAvatar
+                )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (isLoading) {
                 // Loading placeholders
@@ -249,11 +375,24 @@ private fun UserProfileHeader(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
             } else {
-                Text(
-                    text = userProfile.name.ifEmpty { "User" },
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = userProfile.name.ifEmpty { "User" },
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+
+                    EditHintPill(
+                        label = "",
+                        onClick = onEditName
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
                     text = userProfile.email.ifEmpty { "No email" },
@@ -275,12 +414,14 @@ private fun UserProfileHeader(
 private fun CurrentGoalsCard(
     userProfile: UserProfileData,
     goalProgress: Float,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.progressCard),
+            .clip(HandDrawnShapes.medium)
+            .clickable { onClick() },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -319,25 +460,29 @@ private fun CurrentGoalsCard(
                     if (it < 2) Spacer(modifier = Modifier.height(8.dp))
                 }
             } else {
+                val currentWeightDisplay = formatMeasurement(userProfile.currentWeight, "kg")
+                val targetWeightDisplay = formatMeasurement(userProfile.targetWeight, "kg")
+                val heightDisplay = formatMeasurement(userProfile.height, "cm")
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     GoalStatItem(
                         label = "Current Weight",
-                        value = userProfile.currentWeight,
+                        value = currentWeightDisplay,
                         color = MaterialTheme.colorScheme.primary
                     )
 
                     GoalStatItem(
                         label = "Target Weight",
-                        value = userProfile.targetWeight,
+                        value = targetWeightDisplay,
                         color = MaterialTheme.colorScheme.tertiary
                     )
 
                     GoalStatItem(
                         label = "Height",
-                        value = userProfile.height,
+                        value = heightDisplay,
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -370,7 +515,7 @@ private fun StatisticsCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
@@ -437,14 +582,14 @@ private fun StatisticsCard(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     StatItem(
-                        label = "Volume",
-                        value = "${(statistics.totalVolumeLifted / 1000).toInt()}k kg",
+                        label = "Total Volume (k kg)",
+                        value = "${(statistics.totalVolumeLifted / 1000).toInt()}",
                         color = MaterialTheme.colorScheme.primary
                     )
 
                     StatItem(
-                        label = "Avg Duration",
-                        value = "${(statistics.averageWorkoutDuration / 60000)}m",
+                        label = "Avg Duration (min)",
+                        value = "${(statistics.averageWorkoutDuration / 60000)}",
                         color = MaterialTheme.colorScheme.secondary
                     )
 
@@ -460,6 +605,70 @@ private fun StatisticsCard(
 }
 
 @Composable
+private fun EditOverlayIcon(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .size(32.dp)
+            .clickable { onClick() },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
+        tonalElevation = 4.dp,
+        shadowElevation = 4.dp,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+    ) {
+        Icon(
+            imageVector = Icons.Default.Edit,
+            contentDescription = "Edit",
+            modifier = Modifier.padding(6.dp)
+        )
+    }
+}
+
+@Composable
+private fun EditHintPill(
+    label: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(50),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Edit,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+private fun formatMeasurement(value: String, unit: String): String {
+    val sanitized = value.filter { it.isDigit() || it == '.' }
+    if (sanitized.isEmpty()) return "—"
+    val trimmed = sanitized.trimEnd { it == '.' }
+    if (trimmed.isEmpty()) return "—"
+    return "$trimmed $unit"
+}
+
+@Composable
 private fun GoalStatItem(
     label: String,
     value: String,
@@ -469,7 +678,7 @@ private fun GoalStatItem(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = value,
+            text = value.ifBlank { "—" },
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = color
@@ -658,7 +867,7 @@ private fun SettingsSectionCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -738,7 +947,7 @@ private fun SyncDataCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.actionCard),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
         )
@@ -799,7 +1008,7 @@ private fun SignOutCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.actionCard)
+            .clip(HandDrawnShapes.medium)
             .clickable { onSignOut() },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
@@ -874,6 +1083,7 @@ private fun SignOutConfirmationDialog(
         }
     )
 }
+
 
 // Data class for settings items
 data class SettingItem(

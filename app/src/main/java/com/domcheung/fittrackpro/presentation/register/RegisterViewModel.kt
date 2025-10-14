@@ -18,8 +18,10 @@ class RegisterViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState
 
-    private fun validateInput(email: String, password: String, confirmPassword: String): String? {
+    private fun validateInput(email: String, password: String, confirmPassword: String, name: String): String? {
         return when {
+            name.isBlank() -> "Username cannot be empty"
+            name.length < 2 -> "Username must be at least 2 characters"
             email.isBlank() -> "Email cannot be empty"
             !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches() -> "Please enter a valid email address"
             password.length < 6 -> "Password must be at least 6 characters"
@@ -29,7 +31,7 @@ class RegisterViewModel @Inject constructor(
     }
 
     fun registerUser(email: String, password: String, confirmPassword: String, user: User) {
-        val validationError = validateInput(email, password, confirmPassword)
+        val validationError = validateInput(email, password, confirmPassword, user.name)
         if (validationError != null) {
             _uiState.value = RegisterUiState(errorMessage = validationError)
             return

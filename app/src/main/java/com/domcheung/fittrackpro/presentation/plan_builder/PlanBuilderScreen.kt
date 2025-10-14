@@ -1,53 +1,93 @@
 package com.domcheung.fittrackpro.presentation.plan_builder
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PostAdd
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LargeFloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
-import com.domcheung.fittrackpro.presentation.exercise_library.ExerciseLibraryScreen
-import kotlinx.coroutines.launch
-import com.domcheung.fittrackpro.data.model.PlannedExercise
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.rememberAsyncImagePainter
+import com.domcheung.fittrackpro.data.model.PlannedExercise
 import com.domcheung.fittrackpro.data.model.PlannedSet
+import com.domcheung.fittrackpro.presentation.exercise_library.ExerciseLibraryScreen
+import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
+import kotlinx.coroutines.launch
 
-
-/**
- * The main screen for building and editing a workout plan.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlanBuilderScreen(
     viewModel: PlanBuilderViewModel = hiltViewModel(),
+    navController: androidx.navigation.NavHostController,
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // State for controlling the bottom sheet
     val sheetState = rememberModalBottomSheetState()
     var isSheetOpen by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    // --- NEW: Modal Bottom Sheet for Exercise Library ---
     if (isSheetOpen) {
         ModalBottomSheet(
             onDismissRequest = { isSheetOpen = false },
             sheetState = sheetState
         ) {
-            // The content of the bottom sheet is our ExerciseLibraryScreen
             ExerciseLibraryScreen(
                 onClose = {
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -63,16 +103,14 @@ fun PlanBuilderScreen(
                             isSheetOpen = false
                         }
                     }
+                },
+                onExerciseClick = { exerciseId ->
+                    navController.navigate(com.domcheung.fittrackpro.navigation.Routes.exerciseDetail(exerciseId))
                 }
             )
         }
     }
 
-
-
-
-    // --- NEW: Handle successful save ---
-    // When isPlanSaved becomes true, navigate back.
     LaunchedEffect(uiState.isPlanSaved) {
         if (uiState.isPlanSaved) {
             onNavigateBack()
@@ -87,7 +125,6 @@ fun PlanBuilderScreen(
         }
     }
 
-
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -95,11 +132,10 @@ fun PlanBuilderScreen(
                 title = { Text("Create Plan") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
-                    // --- Connect the save button to the ViewModel function ---
                     IconButton(onClick = { viewModel.savePlan() }) {
                         Icon(imageVector = Icons.Default.Done, contentDescription = "Save Plan")
                     }
@@ -108,7 +144,7 @@ fun PlanBuilderScreen(
         },
         floatingActionButton = {
             LargeFloatingActionButton(
-                onClick =  { isSheetOpen = true },
+                onClick = { isSheetOpen = true },
                 shape = CircleShape,
             ) {
                 Icon(
@@ -141,23 +177,25 @@ fun PlanBuilderScreen(
             if (uiState.exercises.isEmpty()) {
                 EmptyPlanContent()
             } else {
-                // The new exercise list UI
                 PlanExerciseList(
                     exercises = uiState.exercises,
-                    viewModel = viewModel // Pass viewModel to handle events
+                    viewModel = viewModel,
+                    onExerciseInfoClick = { exerciseId ->
+                        navController.navigate(com.domcheung.fittrackpro.navigation.Routes.exerciseDetail(exerciseId))
+                    },
+                    expandedExerciseId = uiState.expandedExerciseId
                 )
             }
         }
     }
 }
 
-/**
- * Displays the list of exercises in the plan.
- */
 @Composable
 private fun PlanExerciseList(
     exercises: List<PlannedExercise>,
-    viewModel: PlanBuilderViewModel
+    viewModel: PlanBuilderViewModel,
+    onExerciseInfoClick: (Int) -> Unit = {},
+    expandedExerciseId: Int?
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
@@ -165,90 +203,107 @@ private fun PlanExerciseList(
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         itemsIndexed(exercises, key = { _, item -> item.exerciseId }) { index, exercise ->
-            PlanExerciseItem(
+            SwipeablePlanExerciseItem(
                 exercise = exercise,
-                onRemoveClick = { viewModel.removeExercise(index) },
-                onAddSetClick = { viewModel.addSetToExercise(index) },
-                onRemoveSetClick = { viewModel.removeSetFromExercise(index) },
-                onSetChanged = { setIndex, updatedSet ->
-                    viewModel.updateSet(index, setIndex, updatedSet)
-                }
+                isExpanded = expandedExerciseId == exercise.exerciseId,
+                onExerciseClicked = { viewModel.onExerciseClicked(exercise.exerciseId) },
+                onInfoClick = { onExerciseInfoClick(exercise.exerciseId) },
+                onAddSet = { viewModel.addSetToExercise(index) },
+                onRemoveSet = { viewModel.removeSetFromExercise(index) },
+                onSetChanged = { setIndex, updatedSet -> viewModel.updateSet(index, setIndex, updatedSet) },
+                onDelete = { viewModel.removeExerciseById(exercise.exerciseId) }
             )
         }
     }
 }
 
-/**
- * A single, expandable item in the exercise list.
- */
+@Composable
+private fun SwipeablePlanExerciseItem(
+    exercise: PlannedExercise,
+    isExpanded: Boolean,
+    onExerciseClicked: () -> Unit,
+    onInfoClick: () -> Unit,
+    onAddSet: () -> Unit,
+    onRemoveSet: () -> Unit,
+    onSetChanged: (Int, PlannedSet) -> Unit,
+    onDelete: () -> Unit
+) {
+    PlanExerciseItem(
+        modifier = Modifier.fillMaxWidth(),
+        exercise = exercise,
+        onInfoClick = onInfoClick,
+        isExpanded = isExpanded,
+        onExerciseClicked = onExerciseClicked,
+        onAddSet = onAddSet,
+        onRemoveSet = onRemoveSet,
+        onSetChanged = onSetChanged
+    )
+}
+
 @Composable
 private fun PlanExerciseItem(
+    modifier: Modifier = Modifier,
     exercise: PlannedExercise,
-    onRemoveClick: () -> Unit,
-    onAddSetClick: () -> Unit,
-    onRemoveSetClick: () -> Unit,
+    onInfoClick: () -> Unit,
+    isExpanded: Boolean,
+    onExerciseClicked: () -> Unit,
+    onAddSet: () -> Unit,
+    onRemoveSet: () -> Unit,
     onSetChanged: (Int, PlannedSet) -> Unit
 ) {
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
-
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.medium)
+            .clickable { onExerciseClicked() }
     ) {
         Column {
-            // Header part of the card (always visible)
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded } // Toggle expansion on click
-                    .padding(16.dp),
+                modifier = Modifier.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // TODO: Replace with GIF placeholder
-                Icon(Icons.Default.FitnessCenter, contentDescription = null, modifier = Modifier.size(40.dp))
-                Spacer(modifier = Modifier.width(16.dp))
+                exercise.imageUrl?.let { imageUrl ->
+                    Image(
+                        painter = rememberAsyncImagePainter(model = imageUrl),
+                        contentDescription = "Exercise Image",
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                }
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(text = exercise.exerciseName, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        text = "${exercise.sets.size} sets",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    Text(text = "Sets: ${exercise.sets.size}", style = MaterialTheme.typography.bodyMedium)
+                }
+
+                IconButton(onClick = onInfoClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "Info",
                     )
                 }
-                IconButton(onClick = onRemoveClick) {
-                    Icon(Icons.Rounded.Delete, contentDescription = "Remove Exercise")
-                }
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Expand or collapse"
-                )
             }
-
-            // Expandable content
             AnimatedVisibility(visible = isExpanded) {
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // List of sets for this exercise
-                    exercise.sets.forEachIndexed { setIndex, set ->
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    exercise.sets.forEachIndexed { index, set ->
                         SetInputRow(
                             set = set,
-                            onSetChanged = { updatedSet -> onSetChanged(setIndex, updatedSet) }
+                            onSetChanged = { updatedSet ->
+                                onSetChanged(index, updatedSet)
+                            }
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
                     }
-
-                    // Add/Remove Set buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                        horizontalArrangement = Arrangement.End
                     ) {
-                        IconButton(onClick = onRemoveSetClick, enabled = exercise.sets.size > 1) {
-                            Icon(Icons.Default.RemoveCircleOutline, contentDescription = "Remove last set")
+                        TextButton(onClick = onRemoveSet) {
+                            Text("Remove Set")
                         }
-                        IconButton(onClick = onAddSetClick) {
-                            Icon(Icons.Default.AddCircleOutline, contentDescription = "Add a new set")
+                        TextButton(onClick = onAddSet) {
+                            Text("Add Set")
                         }
                     }
                 }
@@ -257,9 +312,6 @@ private fun PlanExerciseItem(
     }
 }
 
-/**
- * A row for inputting the details of a single set (weight and reps).
- */
 @Composable
 private fun SetInputRow(
     set: PlannedSet,
@@ -288,10 +340,6 @@ private fun SetInputRow(
     }
 }
 
-/**
- * A composable for displaying and editing the plan title.
- * It switches between a Text and a TextField.
- */
 @Composable
 private fun EditablePlanTitle(
     name: String,
@@ -307,7 +355,6 @@ private fun EditablePlanTitle(
         horizontalArrangement = Arrangement.Center
     ) {
         if (isEditing) {
-            // Show a TextField when in editing mode
             OutlinedTextField(
                 value = name,
                 onValueChange = onNameChange,
@@ -320,9 +367,8 @@ private fun EditablePlanTitle(
                 Icon(imageVector = Icons.Default.Check, contentDescription = "Confirm name")
             }
         } else {
-            // Show the name as text with an edit icon
             Text(
-                text = name,
+                text = name.ifBlank { "Untitled Plan" },
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(horizontal = 12.dp)
             )
@@ -333,10 +379,6 @@ private fun EditablePlanTitle(
     }
 }
 
-/**
- * A composable that displays when the new plan has no exercises yet.
- * It prompts the user to add their first exercise.
- */
 @Composable
 private fun EmptyPlanContent() {
     Column(

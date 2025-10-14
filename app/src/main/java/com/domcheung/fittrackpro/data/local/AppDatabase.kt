@@ -25,7 +25,7 @@ import com.domcheung.fittrackpro.data.local.dao.PersonalRecordDao
         WorkoutSession::class,
         PersonalRecord::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

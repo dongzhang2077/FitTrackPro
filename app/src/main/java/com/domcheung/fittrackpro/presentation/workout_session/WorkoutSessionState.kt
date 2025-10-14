@@ -42,6 +42,9 @@ data class WorkoutSessionState(
     // --- NEW PROPERTIES FOR VALIDATION ---
     val showInvalidInputDialog: Boolean = false,
     val inputErrorMessage: String? = null,
+
+    // --- NEW PROPERTY FOR ADDING EXERCISES ---
+    val showExerciseLibrary: Boolean = false
 ) {
     val canCompleteWorkout: Boolean
         get() = elapsedTime > 0

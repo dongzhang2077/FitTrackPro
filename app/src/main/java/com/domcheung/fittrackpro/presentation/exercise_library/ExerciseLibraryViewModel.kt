@@ -3,9 +3,11 @@ package com.domcheung.fittrackpro.presentation.exercise_library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.domain.usecase.GetAllExercisesUseCase
+import com.domcheung.fittrackpro.domain.usecase.SyncExercisesFromApiUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import javax.inject.Inject
 
 /**
@@ -14,11 +16,16 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ExerciseLibraryViewModel @Inject constructor(
-    private val getAllExercisesUseCase: GetAllExercisesUseCase
+    private val getAllExercisesUseCase: GetAllExercisesUseCase,
+    private val syncExercisesFromApiUseCase: SyncExercisesFromApiUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ExerciseLibraryState())
     val uiState: StateFlow<ExerciseLibraryState> = _uiState.asStateFlow()
+
+    // Sync state for API data fetching
+    private val _syncState = MutableStateFlow<SyncState>(SyncState.Idle)
+    val syncState: StateFlow<SyncState> = _syncState.asStateFlow()
 
     // This flow will hold the final, filtered list of exercises to be displayed on the UI.
     val filteredExercises: StateFlow<List<com.domcheung.fittrackpro.data.model.Exercise>> =
@@ -43,6 +50,7 @@ class ExerciseLibraryViewModel @Inject constructor(
 
     init {
         loadAllExercises()
+        syncExercises()
     }
 
     /**
@@ -66,6 +74,27 @@ class ExerciseLibraryViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Syncs exercises from the Wger API.
+     * Call this when user pulls to refresh or taps a sync button.
+     */
+    private fun syncExercises() {
+        viewModelScope.launch {
+            _syncState.value = SyncState.Loading
+
+            val result = syncExercisesFromApiUseCase()
+
+            _syncState.value = when {
+                result.isSuccess -> SyncState.Success
+                else -> SyncState.Error(result.exceptionOrNull()?.message ?: "Failed to sync exercises")
+            }
+
+            // Reset state after 3 seconds
+            delay(3000)
+            _syncState.value = SyncState.Idle
         }
     }
 
@@ -121,4 +150,14 @@ class ExerciseLibraryViewModel @Inject constructor(
     fun clearSelections() {
         _uiState.update { it.copy(selectedExerciseIds = emptySet()) }
     }
+}
+
+/**
+ * Represents the sync state for exercise data from API
+ */
+sealed class SyncState {
+    object Idle : SyncState()
+    object Loading : SyncState()
+    object Success : SyncState()
+    data class Error(val message: String) : SyncState()
 }

@@ -26,6 +26,8 @@ interface AuthRepository {
 
     suspend fun saveLoginState(user: FirebaseUser)
 
+    suspend fun saveLoginStateWithName(user: FirebaseUser, name: String)
+
     suspend fun clearLoginState()
 
     suspend fun checkInitialLoginState(): Boolean

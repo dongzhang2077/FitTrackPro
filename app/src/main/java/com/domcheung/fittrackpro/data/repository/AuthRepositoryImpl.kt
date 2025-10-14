@@ -32,6 +32,12 @@ class AuthRepositoryImpl @Inject constructor(
                     firestore.collection("users").document(uid)
                         .set(userWithUid)
                         .addOnSuccessListener {
+                            // Save login state after successful registration
+                            CoroutineScope(Dispatchers.IO).launch {
+                                // Save with the user's actual name from registration form
+                                saveLoginStateWithName(firebaseUser!!, user.name)
+                                println("DEBUG: Registration success - saved login state for user: ${user.name} (${firebaseUser.email})")
+                            }
                             trySend(Result.success(firebaseUser))
                         }
                         .addOnFailureListener {
@@ -102,6 +108,16 @@ class AuthRepositoryImpl @Inject constructor(
             userEmail = user.email ?: "",
             userUid = user.uid,
             userName = user.displayName ?: ""
+        )
+    }
+
+    // New method to save login state with custom name
+    override suspend fun saveLoginStateWithName(user: FirebaseUser, name: String) {
+        userPreferencesManager.saveLoginState(
+            isLoggedIn = true,
+            userEmail = user.email ?: "",
+            userUid = user.uid,
+            userName = name
         )
     }
 

@@ -12,5 +12,6 @@ data class PlanBuilderState(
     val exercises: List<PlannedExercise> = emptyList(),
     val isEditingName: Boolean = false,
     val errorMessage: String? = null,
-    val isPlanSaved: Boolean = false
+    val isPlanSaved: Boolean = false,
+    val expandedExerciseId: Int? = null
 )

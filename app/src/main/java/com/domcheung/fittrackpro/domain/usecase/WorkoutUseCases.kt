@@ -1,6 +1,10 @@
 package com.domcheung.fittrackpro.domain.usecase
 
-import com.domcheung.fittrackpro.data.model.*
+import com.domcheung.fittrackpro.data.model.Exercise
+import com.domcheung.fittrackpro.data.model.PersonalRecord
+import com.domcheung.fittrackpro.data.model.PlannedExercise
+import com.domcheung.fittrackpro.data.model.WorkoutPlan
+import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.repository.WorkoutRepository
 import com.domcheung.fittrackpro.data.repository.WorkoutStatistics
 import kotlinx.coroutines.flow.Flow
@@ -14,6 +18,32 @@ import javax.inject.Singleton
  */
 
 // ========== Exercise Use Cases ==========
+
+/**
+ * Use case for syncing exercises from Wger API
+ * Handles fetching and storing exercises from external API
+ */
+@Singleton
+class SyncExercisesFromApiUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(): Result<Unit> {
+        return repository.syncExercisesFromApi()
+    }
+}
+
+/**
+ * Use case for getting a single exercise by ID
+ * Retrieves detailed exercise information
+ */
+@Singleton
+class GetExerciseByIdUseCase @Inject constructor(
+    private val repository: WorkoutRepository
+) {
+    suspend operator fun invoke(exerciseId: Int): Exercise? {
+        return repository.getExerciseById(exerciseId)
+    }
+}
 
 /**
  * Use case for searching exercises
@@ -288,35 +318,6 @@ class GetPersonalRecordsUseCase @Inject constructor(
     }
 }
 
-// ========== Data Management Use Cases ==========
-
-/**
- * Use case for syncing data
- * Handles data synchronization between local and remote storage
- */
-@Singleton
-class SyncDataUseCase @Inject constructor(
-    private val repository: WorkoutRepository
-) {
-    suspend operator fun invoke(userId: String): Result<Unit> {
-        return try {
-            // Check if sync is needed
-            val hasUnsyncedData = repository.hasUnsyncedData()
-            if (hasUnsyncedData) {
-                repository.syncToFirebase(userId)
-            } else {
-                Result.success(Unit)
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun hasUnsyncedData(): Boolean {
-        return repository.hasUnsyncedData()
-    }
-}
-
 @Singleton
 class GetWorkoutSessionUseCase @Inject constructor(
     private val repository: WorkoutRepository
@@ -369,6 +370,7 @@ class CheckAndCreatePersonalRecordUseCase @Inject constructor(
     suspend operator fun invoke(
         userId: String,
         exerciseId: Int,
+        exerciseName: String,
         weight: Float,
         reps: Int,
         sessionId: String
@@ -380,6 +382,7 @@ class CheckAndCreatePersonalRecordUseCase @Inject constructor(
         return repository.checkAndCreatePersonalRecord(
             userId = userId,
             exerciseId = exerciseId,
+            exerciseName = exerciseName,
             weight = weight,
             reps = reps,
             sessionId = sessionId

@@ -27,6 +27,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun SplashScreen(
     onNavigateToLogin: () -> Unit,
     onNavigateToMain: () -> Unit,
+    onNavigateToOnboarding: () -> Unit = {},
     viewModel: SplashViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -37,6 +38,7 @@ fun SplashScreen(
         when (uiState.navigationTarget) {
             NavigationTarget.LOGIN -> onNavigateToLogin()
             NavigationTarget.MAIN -> onNavigateToMain()
+            NavigationTarget.ONBOARDING -> onNavigateToOnboarding()
             NavigationTarget.NONE -> { /* Do nothing, still waiting */ }
         }
     }

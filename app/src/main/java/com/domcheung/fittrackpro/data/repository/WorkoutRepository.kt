@@ -215,6 +215,7 @@ interface WorkoutRepository {
     suspend fun checkAndCreatePersonalRecord(
         userId: String,
         exerciseId: Int,
+        exerciseName: String,
         weight: Float,
         reps: Int,
         sessionId: String

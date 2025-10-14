@@ -1,5 +1,6 @@
 package com.domcheung.fittrackpro.data.repository
 
+import android.util.Log
 import com.domcheung.fittrackpro.data.local.dao.ExerciseDao
 import com.domcheung.fittrackpro.data.local.dao.PersonalRecordDao
 import com.domcheung.fittrackpro.data.local.dao.WorkoutPlanDao
@@ -38,7 +39,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     // ========== Exercise Operations ==========
 
     override fun getAllExercises(): Flow<List<Exercise>> {
-        return exerciseDao.getAllExercises()
+        return exerciseDao.getAllExercisesPrioritizeImages()
     }
 
     override suspend fun getExerciseById(exerciseId: Int): Exercise? {
@@ -95,12 +96,190 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     override suspend fun syncExercisesFromApi(): Result<Unit> {
         return try {
-            // We directly call the fallback logic to ensure data exists.
-            // The network call is completely bypassed for this version.
-            createSampleExercisesIfEmpty()
+            Log.d("SYNC_API", "========================================")
+            Log.d("SYNC_API", "Starting exercise sync from Wger API...")
+            Log.d("SYNC_API", "========================================")
+
+            // Fetch all data from Wger API
+            Log.d("SYNC_API", "Fetching exercises...")
+            val exercisesResponse = wgerApiService.getAllExercises()
+            Log.d("SYNC_API", "✅ Fetched ${exercisesResponse.count} total exercises (${exercisesResponse.results.size} in this batch)")
+
+            // Fetch exercise images separately
+            Log.d("SYNC_API", "Fetching exercise images...")
+            val imagesResponse = wgerApiService.getAllExerciseImages()
+            Log.d("SYNC_API", "✅ Fetched ${imagesResponse.count} total images (${imagesResponse.results.size} in this batch)")
+
+
+            // Debug: Log first few image mappings
+            Log.d("SYNC_API", "📸 First 5 images from API:")
+            imagesResponse.results.take(5).forEach { img ->
+                Log.d("SYNC_API", "  Image id=${img.id}, exerciseBase=${img.exerciseBase}, exerciseBaseId=${img.exerciseBaseId}, exerciseId=${img.exerciseId}, url=${img.imageUrl}, isMain=${img.isMain}")
+                Log.d("SYNC_API", "  → Resolved exercise ID: ${img.resolveExerciseId()}")
+            }
+
+            // Create a map of exerciseId -> image URL (prefer main images)
+            val imageMap = mutableMapOf<Int, String>()
+            imagesResponse.results.forEach { imageDto ->
+                val exerciseId = imageDto.resolveExerciseId()
+                if (exerciseId != null && exerciseId != 0) {
+                    val existingImage = imageMap[exerciseId]
+                    // Only update if this is a main image or if we don't have an image yet
+                    if (existingImage == null || imageDto.isMain) {
+                        val fullUrl = when {
+                            imageDto.imageUrl.startsWith("http://") || imageDto.imageUrl.startsWith("https://") -> imageDto.imageUrl
+                            imageDto.imageUrl.startsWith("/") -> "https://wger.de${imageDto.imageUrl}"
+                            else -> "https://wger.de/${imageDto.imageUrl}"
+                        }
+                        imageMap[exerciseId] = fullUrl
+                    }
+                }
+            }
+
+
+            Log.d("SYNC_API", "📸 Mapped images for ${imageMap.size} exercises")
+            Log.d("SYNC_API", "📸 First 5 exercise IDs with images: ${imageMap.keys.take(5).joinToString()}")
+            Log.d("SYNC_API", "📸 First 5 exercise IDs from API: ${exercisesResponse.results.take(5).map { it.id }.joinToString()}")
+
+            var skippedCount = 0
+            var validCount = 0
+            val exercisesWithImages = mutableListOf<Pair<String, String>>() // name to URL
+            val exercisesWithVideos = mutableListOf<Pair<String, String>>() // name to URL
+
+            // Map DTOs to local Exercise entities
+            val exercises = exercisesResponse.results.mapIndexedNotNull { index, dto ->
+                // Extract English name from translations array
+                val englishTranslation = dto.translations?.firstOrNull { it.languageId == 2 }
+                val exerciseName = englishTranslation?.name?.trim()
+
+                // Skip if no valid name found
+                if (exerciseName.isNullOrBlank()) {
+                    skippedCount++
+                    if (skippedCount <= 10) {
+                        Log.d("SYNC_API", "⚠️ Skipping exercise #$index: id=${dto.id}, no English translation")
+                    }
+                    return@mapIndexedNotNull null
+                }
+
+                validCount++
+                if (validCount <= 5) {
+                    Log.d("SYNC_API", "✅ Valid exercise #$validCount: id=${dto.id}, name=$exerciseName, category=${dto.category?.name}")
+                }
+
+                // Extract description from translations (remove HTML tags)
+                val description = englishTranslation.description?.let { desc ->
+                    desc.replace(Regex("<[^>]*>"), "") // Remove HTML tags
+                        .replace(Regex("\\s+"), " ") // Normalize whitespace
+                        .trim()
+                        .ifBlank { "No description available" }
+                } ?: "No description available"
+
+                // Get image URL from the separate images map
+                val imageUrl = imageMap[dto.id]
+                // Get the first video URL directly from the exercise DTO, if available
+                val videoUrl = dto.videos?.firstOrNull()?.videoUrl
+
+                if (validCount <= 5) {
+                    Log.d("SYNC_API", "  📸 Image URL: ${imageUrl ?: "none"}")
+                    Log.d("SYNC_API", "  🎥 Video URL: ${videoUrl ?: "none"}")
+                }
+
+                // Track exercises with images for logging
+                if (imageUrl != null && exercisesWithImages.size < 10) {
+                    exercisesWithImages.add(exerciseName to imageUrl)
+                }
+                // Track exercises with videos for logging
+                if (videoUrl != null && exercisesWithVideos.size < 10) {
+                    exercisesWithVideos.add(exerciseName to videoUrl)
+                }
+
+                // Extract muscle names
+                val primaryMuscles = dto.muscles?.map { it.nameEn ?: it.name } ?: emptyList()
+                val secondaryMuscles = dto.musclesSecondary?.map { it.nameEn ?: it.name } ?: emptyList()
+
+                // Extract equipment names
+                val equipmentNames = dto.equipment?.map { it.name } ?: emptyList()
+
+                Exercise(
+                    id = dto.id,
+                    name = exerciseName,
+                    description = description,
+                    category = dto.category?.name ?: "Uncategorized",
+                    muscles = primaryMuscles,
+                    secondaryMuscles = secondaryMuscles,
+                    equipment = equipmentNames,
+                    imageUrl = imageUrl,
+                    videoUrl = videoUrl, // Videos can be added later
+                    instructions = description,
+                    isCustom = false,
+                    createdAt = System.currentTimeMillis(),
+                    syncedToFirebase = false
+                )
+            }
+
+            Log.d("SYNC_API", "========================================")
+            Log.d("SYNC_API", "API returned: ${exercisesResponse.results.size} exercises")
+            Log.d("SYNC_API", "Skipped (no English translation): $skippedCount exercises")
+            Log.d("SYNC_API", "Valid exercises: $validCount")
+            Log.d("SYNC_API", "Exercises with images: ${exercises.count { it.imageUrl != null }}")
+            Log.d("SYNC_API", "Mapped to entities: ${exercises.size} exercises")
+            Log.d("SYNC_API", "========================================")
+
+            // Log the first 10 exercises that have images
+            if (exercisesWithImages.isNotEmpty()) {
+                Log.d("SYNC_API", "🖼️ First 10 exercises WITH images (search for these!):")
+                exercisesWithImages.forEachIndexed { index, (name, url) ->
+                    Log.d("SYNC_API", "  ${index + 1}. \"$name\" -> $url")
+                }
+            } else {
+                Log.d("SYNC_API", "⚠️ WARNING: No exercises have images! Image ID mapping may be broken.")
+            }
+            // Log the first 10 exercises that have videos
+            if (exercisesWithVideos.isNotEmpty()) {
+                Log.d("SYNC_API", "🎥 First 10 exercises WITH videos (search for these!):")
+                exercisesWithVideos.forEachIndexed { index, (name, url) ->
+                    Log.d("SYNC_API", "  ${index + 1}. \"$name\" -> $url")
+                }
+            } else {
+                Log.d("SYNC_API", "⚠️ WARNING: No exercises have videos! Video ID mapping may be broken.")
+            }
+            Log.d("SYNC_API", "========================================")
+
+            Log.d("SYNC_API", "Clearing old API exercises from database...")
+
+            // Get count before clearing
+            val countBefore = exerciseDao.getExerciseCount()
+            Log.d("SYNC_API", "Database had $countBefore exercises before clearing")
+
+            // Clear old API exercises (keeps custom exercises) and insert new ones
+            exerciseDao.clearApiExercises()
+
+            val countAfterClear = exerciseDao.getExerciseCount()
+            Log.d("SYNC_API", "Database has $countAfterClear exercises after clearing (custom exercises)")
+
+            Log.d("SYNC_API", "Inserting ${exercises.size} new exercises...")
+            exerciseDao.insertExercises(exercises)
+
+            val countAfterInsert = exerciseDao.getExerciseCount()
+            Log.d("SYNC_API", "Database now has $countAfterInsert exercises total")
+
+            Log.d("SYNC_API", "========================================")
+            Log.d("SYNC_API", "✅ Successfully synced ${exercises.size} exercises to database")
+            Log.d("SYNC_API", "========================================")
+
             Result.success(Unit)
+
         } catch (e: Exception) {
+            Log.e("SYNC_API", "========================================")
+            Log.e("SYNC_API", "❌ Error syncing from API")
+            Log.e("SYNC_API", "Error type: ${e.javaClass.simpleName}")
+            Log.e("SYNC_API", "Error message: ${e.message}")
+            Log.e("SYNC_API", "========================================")
             e.printStackTrace()
+
+            // Fallback: Create sample exercises if database is empty
+            createSampleExercisesIfEmpty()
+
             Result.failure(e)
         }
     }
@@ -381,6 +560,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     override suspend fun checkAndCreatePersonalRecord(
         userId: String,
         exerciseId: Int,
+        exerciseName: String,
         weight: Float,
         reps: Int,
         sessionId: String
@@ -388,9 +568,6 @@ class WorkoutRepositoryImpl @Inject constructor(
         println("PR_DEBUG: --- Starting PR Check for exerciseId: $exerciseId ---")
         println("PR_DEBUG: Values: weight=$weight, reps=$reps")
         return try {
-            val exercise = exerciseDao.getExerciseById(exerciseId)
-                ?: return Result.failure(Exception("Exercise not found"))
-
             val volume = weight * reps
             val oneRepMax = calculateOneRepMax(weight, reps)
 
@@ -400,28 +577,28 @@ class WorkoutRepositoryImpl @Inject constructor(
             val isNewWeightRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_WEIGHT", weight, 0, 0f, 0f)
             println("PR_DEBUG: Is new MAX_WEIGHT record? $isNewWeightRecord")
             if (isNewWeightRecord) {
-                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_WEIGHT, weight, reps, oneRepMax, volume, sessionId))
+                newRecords.add(createPersonalRecord(userId, exerciseId, exerciseName, RecordType.MAX_WEIGHT, weight, reps, oneRepMax, volume, sessionId))
             }
 
             // Check for MAX_REPS record
             val isNewRepsRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_REPS", 0f, reps, 0f, 0f)
             println("PR_DEBUG: Is new MAX_REPS record? $isNewRepsRecord")
             if (isNewRepsRecord) {
-                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_REPS, weight, reps, oneRepMax, volume, sessionId))
+                newRecords.add(createPersonalRecord(userId, exerciseId, exerciseName, RecordType.MAX_REPS, weight, reps, oneRepMax, volume, sessionId))
             }
 
             // Check for MAX_VOLUME record
             val isNewVolumeRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_VOLUME", 0f, 0, volume, 0f)
             println("PR_DEBUG: Is new MAX_VOLUME record? $isNewVolumeRecord")
             if (isNewVolumeRecord) {
-                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_VOLUME, weight, reps, oneRepMax, volume, sessionId))
+                newRecords.add(createPersonalRecord(userId, exerciseId, exerciseName, RecordType.MAX_VOLUME, weight, reps, oneRepMax, volume, sessionId))
             }
 
             // Check for MAX_ONE_REP_MAX record
             val isNew1RMRecord = personalRecordDao.isNewRecord(userId, exerciseId, "MAX_ONE_REP_MAX", 0f, 0, 0f, oneRepMax)
             println("PR_DEBUG: Is new MAX_ONE_REP_MAX record? $isNew1RMRecord")
             if (isNew1RMRecord) {
-                newRecords.add(createPersonalRecord(userId, exercise, RecordType.MAX_ONE_REP_MAX, weight, reps, oneRepMax, volume, sessionId))
+                newRecords.add(createPersonalRecord(userId, exerciseId, exerciseName, RecordType.MAX_ONE_REP_MAX, weight, reps, oneRepMax, volume, sessionId))
             }
 
             if (newRecords.isNotEmpty()) {
@@ -547,7 +724,8 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     private fun createPersonalRecord(
         userId: String,
-        exercise: Exercise, // Pass the whole Exercise object
+        exerciseId: Int,
+        exerciseName: String,
         recordType: RecordType,
         weight: Float,
         reps: Int,
@@ -557,8 +735,8 @@ class WorkoutRepositoryImpl @Inject constructor(
     ): PersonalRecord {
         return PersonalRecord(
             id = UUID.randomUUID().toString(),
-            exerciseId = exercise.id, // Use exercise.id
-            exerciseName = exercise.name, // Use exercise.name
+            exerciseId = exerciseId,
+            exerciseName = exerciseName,
             userId = userId,
             recordType = recordType,
             weight = weight,
@@ -644,9 +822,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     exerciseName = "Squat",
                     orderIndex = 0,
                     sets = listOf(
-                        PlannedSet(1, 40f, 8),
-                        PlannedSet(2, 40f, 8),
-                        PlannedSet(3, 40f, 8)
+                        PlannedSet(setNumber = 1, targetWeight = 40f, targetReps = 8),
+                        PlannedSet(setNumber = 2, targetWeight = 40f, targetReps = 8),
+                        PlannedSet(setNumber = 3, targetWeight = 40f, targetReps = 8)
                     )
                 ),
                 PlannedExercise(
@@ -654,9 +832,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     exerciseName = "Bench Press",
                     orderIndex = 1,
                     sets = listOf(
-                        PlannedSet(1, 30f, 8),
-                        PlannedSet(2, 30f, 8),
-                        PlannedSet(3, 30f, 8)
+                        PlannedSet(setNumber = 1, targetWeight = 30f, targetReps = 8),
+                        PlannedSet(setNumber = 2, targetWeight = 30f, targetReps = 8),
+                        PlannedSet(setNumber = 3, targetWeight = 30f, targetReps = 8)
                     )
                 ),
                 PlannedExercise(
@@ -664,8 +842,8 @@ class WorkoutRepositoryImpl @Inject constructor(
                     exerciseName = "Deadlift",
                     orderIndex = 2,
                     sets = listOf(
-                        PlannedSet(1, 50f, 5),
-                        PlannedSet(2, 50f, 5)
+                        PlannedSet(setNumber = 1, targetWeight = 50f, targetReps = 5),
+                        PlannedSet(setNumber = 2, targetWeight = 50f, targetReps = 5)
                     )
                 )
             ),
@@ -685,4 +863,3 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 }
-

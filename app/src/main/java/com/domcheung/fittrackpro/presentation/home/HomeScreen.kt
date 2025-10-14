@@ -16,22 +16,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.TrackChanges
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,24 +48,31 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.data.model.WorkoutPlan
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onNavigateToWorkout: () -> Unit = {},
     onNavigateToProgress: () -> Unit = {},
     onNavigateToWorkoutSession: (String) -> Unit = {},
     onNavigateToWorkoutTab: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val activeWorkoutSession by viewModel.activeWorkoutSession.collectAsState()
-    val workoutStatistics by viewModel.workoutStatistics.collectAsState()
+    val activeWorkoutSession by viewModel.activeWorkoutSession.collectAsState(initial = null)
+    val displayName by viewModel.displayName.collectAsState()
+    val storedWeeklyGoal by viewModel.weeklyWorkoutGoal.collectAsState()
+    
+    // State for weekly goal dialog
+    var showWeeklyGoalDialog by remember { mutableStateOf(false) }
+    var weeklyGoal by remember { mutableStateOf(storedWeeklyGoal) }
 
-    // Get user display name
-    val displayName = viewModel.getUserDisplayName()
+    LaunchedEffect(storedWeeklyGoal, showWeeklyGoalDialog) {
+        if (!showWeeklyGoalDialog) {
+            weeklyGoal = storedWeeklyGoal
+        }
+    }
 
-    // Handle one-time events
     LaunchedEffect(uiState.workoutStarted) {
         if (uiState.workoutStarted) {
             uiState.startedSessionId?.let { sessionId ->
@@ -79,15 +94,12 @@ fun HomeScreen(
     LaunchedEffect(uiState.navigateToWorkoutTab) {
         if (uiState.navigateToWorkoutTab) {
             onNavigateToWorkoutTab()
-            viewModel.clearEvents() // Reset the event after navigation
+            viewModel.clearEvents()
         }
     }
 
-    // Show error snackbar
     uiState.errorMessage?.let { errorMessage ->
         LaunchedEffect(errorMessage) {
-            // In a real app, you would show a SnackBar here
-            // For now, we'll just clear the error after showing it
             viewModel.clearError()
         }
     }
@@ -98,33 +110,34 @@ fun HomeScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-        // Welcome header with real user data
         WelcomeHeader(
             userName = displayName,
             isLoading = uiState.isLoading
         )
 
-        // Active workout card or today's goal card
-        activeWorkoutSession?.let { session ->
+        val currentSession = activeWorkoutSession
+        if (currentSession != null) {
             ActiveWorkoutCard(
-                sessionData = session,
+                sessionData = currentSession,
                 onResumeClick = { viewModel.resumeActiveWorkout() },
                 isLoading = uiState.isAnyOperationInProgress
             )
-        } ?: run {
+        } else {
+            val recommendedPlan by produceState<WorkoutPlan?>(initialValue = null) {
+                value = viewModel.getTodaysRecommendedPlan()
+            }
             TodayGoalCard(
-                recommendedPlan = viewModel.getTodaysRecommendedPlan(),
+                recommendedPlan = recommendedPlan,
                 onStartClick = { viewModel.quickStartWorkout() },
                 isLoading = uiState.isAnyOperationInProgress
             )
         }
 
-        // Quick actions grid with real functionality
         QuickActionsGrid(
             onStartWorkoutClick = {
-                activeWorkoutSession?.let {
+                if (activeWorkoutSession != null) {
                     viewModel.resumeActiveWorkout()
-                } ?: run {
+                } else {
                     viewModel.quickStartWorkout()
                 }
             },
@@ -133,27 +146,21 @@ fun HomeScreen(
             hasActiveWorkout = activeWorkoutSession != null
         )
 
-        // Weekly overview with real statistics
         WeeklyOverviewCard(
             weeklyProgress = viewModel.getWeeklyProgress(),
             currentStreak = viewModel.getCurrentStreak(),
             thisWeekWorkouts = viewModel.getThisWeekWorkoutCount(),
-            weeklyGoal = viewModel.getWeeklyGoal(),
-            isLoading = uiState.isLoading
+            weeklyGoal = storedWeeklyGoal,
+            isLoading = uiState.isLoading,
+            onEditWeeklyGoal = {
+                weeklyGoal = storedWeeklyGoal
+                showWeeklyGoalDialog = true
+            }
         )
-
-        // Sync status if needed
-        if (uiState.hasUnsyncedData) {
-            SyncStatusCard(
-                onSyncClick = { viewModel.syncData() },
-                isSyncing = uiState.isSyncing
-            )
-        }
 
         Spacer(modifier = Modifier.weight(1f))
     }
 
-    // Loading overlay
     if (uiState.isLoading) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -164,6 +171,69 @@ fun HomeScreen(
             )
         }
     }
+    
+    // Weekly Goal Edit Dialog
+    if (showWeeklyGoalDialog) {
+        AlertDialog(
+            onDismissRequest = { showWeeklyGoalDialog = false },
+            title = { Text("Edit Weekly Workout Goal") },
+            text = {
+                Column {
+                    Text("Set your weekly workout goal")
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Modern slider-style input
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "$weeklyGoal",
+                                style = MaterialTheme.typography.headlineMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "times/week",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Slider
+                        Slider(
+                            value = weeklyGoal.toFloat(),
+                            onValueChange = { weeklyGoal = it.toInt() },
+                            valueRange = 1f..7f,
+                            steps = 5, // 1-7 gives 5 steps between
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.saveWeeklyGoal(weeklyGoal)
+                        showWeeklyGoalDialog = false
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWeeklyGoalDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -173,7 +243,6 @@ private fun WelcomeHeader(
 ) {
     Column {
         if (isLoading) {
-            // Loading placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.6f)
@@ -183,7 +252,7 @@ private fun WelcomeHeader(
             )
         } else {
             Text(
-                text = "👋 Hi, $userName!",
+                text = "👋 Hello, ${userName.ifBlank { "Friend" }}!",
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -206,7 +275,7 @@ private fun ActiveWorkoutCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
@@ -240,9 +309,8 @@ private fun ActiveWorkoutCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Progress indicator
             LinearProgressIndicator(
-                progress = sessionData.completionPercentage / 100f,
+                progress = { sessionData.completionPercentage / 100f },
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.secondary
             )
@@ -277,14 +345,14 @@ private fun ActiveWorkoutCard(
 
 @Composable
 private fun TodayGoalCard(
-    recommendedPlan: com.domcheung.fittrackpro.data.model.WorkoutPlan?,
+    recommendedPlan: WorkoutPlan?,
     onStartClick: () -> Unit,
     isLoading: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
@@ -424,7 +492,7 @@ private fun QuickActionItem(
 ) {
     Card(
         modifier = modifier
-            .clip(HandDrawnShapes.actionCard)
+            .clip(HandDrawnShapes.small)
             .then(
                 if (enabled) {
                     Modifier.clickable { onClick() }
@@ -474,12 +542,14 @@ private fun WeeklyOverviewCard(
     currentStreak: Int,
     thisWeekWorkouts: Int,
     weeklyGoal: Int,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onEditWeeklyGoal: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.progressCard),
+            .clip(HandDrawnShapes.medium)
+            .clickable { onEditWeeklyGoal() },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -487,16 +557,26 @@ private fun WeeklyOverviewCard(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                text = "📊 This Week",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "📊 This Week",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit weekly goal",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             if (isLoading) {
-                // Loading placeholders
                 repeat(3) {
                     Box(
                         modifier = Modifier
@@ -525,8 +605,8 @@ private fun WeeklyOverviewCard(
                     )
 
                     WeeklyStatItem(
-                        label = "Streak",
-                        value = "$currentStreak days",
+                        label = "Streak (days)",
+                        value = "$currentStreak",
                         color = MaterialTheme.colorScheme.secondary
                     )
                 }
@@ -555,66 +635,5 @@ private fun WeeklyStatItem(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-    }
-}
-
-@Composable
-private fun SyncStatusCard(
-    onSyncClick: () -> Unit,
-    isSyncing: Boolean
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.CloudSync,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.secondary
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = "💾 Unsynced Data",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "You have local data that hasn't been synced",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Button(
-                onClick = onSyncClick,
-                enabled = !isSyncing
-            ) {
-                if (isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Text("Sync")
-                }
-            }
-        }
     }
 }

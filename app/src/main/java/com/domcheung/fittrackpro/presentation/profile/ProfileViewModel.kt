@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
 import com.domcheung.fittrackpro.data.repository.AuthRepository
-import com.domcheung.fittrackpro.data.repository.WorkoutStatistics
 import com.domcheung.fittrackpro.domain.usecase.GetWorkoutStatisticsUseCase
 import com.domcheung.fittrackpro.domain.usecase.SyncDataUseCase
+import com.domcheung.fittrackpro.data.repository.WorkoutStatistics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -60,6 +60,43 @@ class ProfileViewModel @Inject constructor(
             initialValue = ""
         )
 
+    // User avatar URL
+    val userAvatarUrl: StateFlow<String> = userPreferencesManager.userAvatarUrl
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ""
+        )
+
+    // User physical data
+    val userCurrentWeight: StateFlow<String> = userPreferencesManager.userCurrentWeight
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "75 kg"
+        )
+
+    val userTargetWeight: StateFlow<String> = userPreferencesManager.userTargetWeight
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "70 kg"
+        )
+
+    val userHeight: StateFlow<String> = userPreferencesManager.userHeight
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "175 cm"
+        )
+
+    val userInitialWeight: StateFlow<String> = userPreferencesManager.userInitialWeight
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "80 kg"
+        )
+
     // Workout statistics for profile summary
     val workoutStatistics: StateFlow<WorkoutStatistics?> = userUid
         .flatMapLatest { uid ->
@@ -83,16 +120,38 @@ class ProfileViewModel @Inject constructor(
         userName,
         userEmail,
         userUid,
+        userAvatarUrl,
+        userCurrentWeight,
+        userTargetWeight,
+        userHeight,
+        userInitialWeight,
         workoutStatistics
-    ) { name, email, uid, stats ->
+    ) { values ->
+        val name = (values[0] as String).trim()
+        val email = values[1] as String
+        val uid = values[2] as String
+        val avatarUrl = values[3] as String
+        val currentWeight = values[4] as String
+        val targetWeight = values[5] as String
+        val height = values[6] as String
+        val initialWeight = values[7] as String
+        val stats = values[8] as? WorkoutStatistics
+
+        val sanitizedCurrent = sanitizeNumberString(currentWeight)
+        val sanitizedTarget = sanitizeNumberString(targetWeight)
+        val sanitizedHeight = sanitizeNumberString(height)
+        val sanitizedInitial = sanitizeNumberString(initialWeight)
+
         UserProfileData(
-            name = name.ifEmpty { email.substringBefore('@') },
+            name = name,
             email = email,
             uid = uid,
+            avatarUrl = avatarUrl,
             joinDate = "Member since Jan 2025", // TODO: Get actual join date
-            currentWeight = "75 kg", // TODO: Get from user preferences
-            targetWeight = "70 kg", // TODO: Get from user goals
-            height = "175 cm", // TODO: Get from user preferences
+            currentWeight = sanitizedCurrent,
+            targetWeight = sanitizedTarget,
+            height = sanitizedHeight,
+            initialWeight = if (sanitizedInitial.isNotEmpty()) sanitizedInitial else sanitizedCurrent,
             totalWorkouts = stats?.totalWorkouts ?: 0,
             currentStreak = stats?.currentStreak ?: 0,
             totalVolumeLifted = stats?.totalVolumeLifted ?: 0f
@@ -106,6 +165,7 @@ class ProfileViewModel @Inject constructor(
     init {
         loadProfileData()
         checkSyncStatus()
+        performAutoSyncIfNeeded()
     }
 
     /**
@@ -140,6 +200,23 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(hasUnsyncedData = hasUnsyncedData)
             } catch (e: Exception) {
                 // Ignore sync status errors
+            }
+        }
+    }
+
+    /**
+     * Perform automatic sync if needed
+     */
+    private fun performAutoSyncIfNeeded() {
+        viewModelScope.launch {
+            try {
+                val currentUid = userUid.value
+                if (currentUid.isNotEmpty()) {
+                    syncDataUseCase.performAutoSync(currentUid)
+                    checkSyncStatus() // Update status after sync attempt
+                }
+            } catch (e: Exception) {
+                // Silently ignore auto sync errors - don't bother the user
             }
         }
     }
@@ -189,7 +266,7 @@ class ProfileViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isSyncing = true)
 
         viewModelScope.launch {
-            val result = syncDataUseCase(currentUid)
+            val result = syncDataUseCase.performAutoSync(currentUid)
 
             result.fold(
                 onSuccess = {
@@ -230,6 +307,106 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isUpdatingProfile = false,
                     errorMessage = e.message ?: "Failed to update profile"
+                )
+            }
+        }
+    }
+
+    /**
+     * Update user name
+     */
+    fun updateUserName(newName: String) {
+        val trimmedName = newName.trim()
+        if (trimmedName.length < 2) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "Name must be at least 2 characters"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isUpdatingProfile = true)
+
+        viewModelScope.launch {
+            try {
+                val sanitizedCurrent = sanitizeNumberString(userCurrentWeight.value)
+                val sanitizedTarget = sanitizeNumberString(userTargetWeight.value)
+                val sanitizedHeight = sanitizeNumberString(userHeight.value)
+                val sanitizedInitial = sanitizeNumberString(userInitialWeight.value)
+
+                userPreferencesManager.saveUserProfile(
+                    name = trimmedName,
+                    avatarUrl = userAvatarUrl.value,
+                    currentWeight = sanitizedCurrent,
+                    targetWeight = sanitizedTarget,
+                    height = sanitizedHeight,
+                    initialWeight = sanitizedInitial
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    profileUpdated = true,
+                    errorMessage = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    errorMessage = e.message ?: "Failed to update name"
+                )
+            }
+        }
+    }
+
+    /**
+     * Update user avatar URL (supports both URL and default avatar format)
+     */
+    fun updateUserAvatar(avatarData: String) {
+        _uiState.value = _uiState.value.copy(isUpdatingProfile = true)
+
+        viewModelScope.launch {
+            try {
+                userPreferencesManager.updateUserAvatar(avatarData)
+
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    profileUpdated = true,
+                    errorMessage = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    errorMessage = e.message ?: "Failed to update avatar"
+                )
+            }
+        }
+    }
+
+    /**
+     * Update user weight goals
+     */
+    fun updateWeightGoals(currentWeight: String, targetWeight: String, initialWeight: String = "") {
+        _uiState.value = _uiState.value.copy(isUpdatingProfile = true)
+
+        viewModelScope.launch {
+            try {
+                val sanitizedCurrent = sanitizeNumberString(currentWeight)
+                val sanitizedTarget = sanitizeNumberString(targetWeight)
+                val sanitizedInitial = sanitizeNumberString(initialWeight)
+
+                userPreferencesManager.updateWeightGoals(
+                    currentWeight = sanitizedCurrent,
+                    targetWeight = sanitizedTarget,
+                    initialWeight = sanitizedInitial
+                )
+
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    profileUpdated = true,
+                    errorMessage = null
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isUpdatingProfile = false,
+                    errorMessage = e.message ?: "Failed to update weight goals"
                 )
             }
         }
@@ -313,8 +490,8 @@ class ProfileViewModel @Inject constructor(
      * Get display name for user
      */
     fun getDisplayName(): String {
-        val name = userName.value
-        val email = userEmail.value
+        val name = userName.value.trim()
+        val email = userEmail.value.trim()
 
         return when {
             name.isNotEmpty() -> name
@@ -345,16 +522,45 @@ class ProfileViewModel @Inject constructor(
      */
     fun getGoalProgress(): Float {
         val profile = userProfile.value
-        val currentWeight = profile.currentWeight.replace("kg", "").trim().toFloatOrNull() ?: 75f
-        val targetWeight = profile.targetWeight.replace("kg", "").trim().toFloatOrNull() ?: 70f
-        val initialWeight = 80f // TODO: Get from user's initial weight
+        if (profile.currentWeight.isBlank() || profile.targetWeight.isBlank() || profile.initialWeight.isBlank()) {
+            return 0f
+        }
 
-        if (initialWeight == targetWeight) return 100f
+        val currentWeight = parseNumber(profile.currentWeight, fallback = 0f)
+        val targetWeight = parseNumber(profile.targetWeight, fallback = currentWeight)
+        val initialWeight = parseNumber(profile.initialWeight, fallback = currentWeight)
 
-        val totalWeightToLose = initialWeight - targetWeight
-        val weightLost = initialWeight - currentWeight
+        val totalChange = targetWeight - initialWeight
+        if (totalChange == 0f) {
+            return if (currentWeight == initialWeight && currentWeight != 0f) 100f else 0f
+        }
 
-        return ((weightLost / totalWeightToLose) * 100f).coerceIn(0f, 100f)
+        val achievedChange = currentWeight - initialWeight
+        val progressFraction = achievedChange / totalChange
+
+        return (progressFraction.coerceIn(0f, 1f) * 100f)
+    }
+
+    private fun sanitizeNumberString(value: String): String {
+        var decimalFound = false
+        val sanitized = buildString {
+            value.forEach { char ->
+                when {
+                    char.isDigit() -> append(char)
+                    char == '.' && !decimalFound -> {
+                        append(char)
+                        decimalFound = true
+                    }
+                }
+            }
+        }.trim()
+
+        return sanitized.trimEnd { it == '.' }
+    }
+
+    private fun parseNumber(value: String, fallback: Float): Float {
+        val sanitized = sanitizeNumberString(value)
+        return sanitized.toFloatOrNull() ?: fallback
     }
 }
 
@@ -388,10 +594,12 @@ data class UserProfileData(
     val name: String = "",
     val email: String = "",
     val uid: String = "",
+    val avatarUrl: String = "",
     val joinDate: String = "",
-    val currentWeight: String = "0 kg",
-    val targetWeight: String = "0 kg",
-    val height: String = "0 cm",
+    val currentWeight: String = "",
+    val targetWeight: String = "",
+    val height: String = "",
+    val initialWeight: String = "",
     val totalWorkouts: Int = 0,
     val currentStreak: Int = 0,
     val totalVolumeLifted: Float = 0f

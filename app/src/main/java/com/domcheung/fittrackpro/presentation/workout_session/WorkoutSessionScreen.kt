@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
@@ -44,18 +45,21 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -72,26 +76,28 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.domcheung.fittrackpro.data.model.ExecutedExercise
 import com.domcheung.fittrackpro.data.model.PersonalRecord
 import com.domcheung.fittrackpro.data.model.RecordType
 import com.domcheung.fittrackpro.data.model.WeightUnit
 import com.domcheung.fittrackpro.data.model.WorkoutSession
 import com.domcheung.fittrackpro.data.model.WorkoutStatus
+import com.domcheung.fittrackpro.presentation.exercise_library.ExerciseLibraryScreen
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutSessionScreen(
-    sessionId: String,
     viewModel: WorkoutSessionViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit = {},
-    onWorkoutComplete: () -> Unit = {}
+    onWorkoutComplete: () -> Unit = {},
+    onExerciseInfoClick: (Int) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentSession by viewModel.currentSession.collectAsState()
 
-    // Handle one-time navigation events
     LaunchedEffect(uiState.workoutCompleted) {
         if (uiState.workoutCompleted) {
             onWorkoutComplete()
@@ -103,28 +109,34 @@ fun WorkoutSessionScreen(
         }
     }
 
-    // This is the main layout container for the screen.
-    // A Box allows us to stack layers correctly.
-    Box(modifier = Modifier.fillMaxSize()) {
+    if (uiState.showExerciseLibrary) {
+        ModalBottomSheet(onDismissRequest = { viewModel.hideExerciseLibrary() }) {
+            ExerciseLibraryScreen(
+                onClose = { viewModel.hideExerciseLibrary() },
+                onAddExercises = {
+                    viewModel.addExercisesToCurrentSession(it)
+                    viewModel.hideExerciseLibrary()
+                },
+                onExerciseClick = { onExerciseInfoClick(it) }
+            )
+        }
+    }
 
-        // --- Layer 1: The main content ---
+    Box(modifier = Modifier.fillMaxSize()) {
         Scaffold { paddingValues ->
             if (currentSession == null && uiState.isLoading) {
                 LoadingScreen()
             } else if (currentSession != null) {
-                // The main content no longer needs to worry about the rest screen.
                 WorkoutSessionContent(
                     paddingValues = paddingValues,
                     session = currentSession!!,
                     uiState = uiState,
-                    viewModel = viewModel
+                    viewModel = viewModel,
+                    onExerciseInfoClick = onExerciseInfoClick
                 )
             }
         }
 
-        // --- Layer 2: The Rest Screen Overlay ---
-        // It is now at the same level as the PR notifications, but placed before it,
-        // so it will appear underneath the PR cards.
         AnimatedVisibility(
             visible = uiState.isCurrentlyResting,
             enter = fadeIn(animationSpec = tween(300)),
@@ -138,8 +150,6 @@ fun WorkoutSessionScreen(
             )
         }
 
-        // --- Layer 3: The PR Notification Overlay ---
-        // This is now guaranteed to be on top of the rest screen.
         PrNotificationOverlay(
             records = uiState.newlyAchievedRecords,
             onFinished = {
@@ -147,7 +157,6 @@ fun WorkoutSessionScreen(
             }
         )
 
-        // --- Topmost Layer: All Dialogs ---
         if (uiState.showAbandonDialog) {
             AbandonWorkoutDialog(
                 onConfirm = { viewModel.abandonWorkout() },
@@ -214,13 +223,12 @@ private fun WorkoutSessionHeader(
     onPauseClick: () -> Unit,
     onResumeClick: () -> Unit,
     onStopClick: () -> Unit,
-    isPaused: Boolean,
-    isLoading: Boolean
+    isPaused: Boolean
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.progressCard),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )
@@ -228,7 +236,6 @@ private fun WorkoutSessionHeader(
         Column(
             modifier = Modifier.padding(16.dp)
         ) {
-            // Title and progress
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -246,8 +253,6 @@ private fun WorkoutSessionHeader(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                // Timer
                 Text(
                     text = formatTime(elapsedTime),
                     style = MaterialTheme.typography.headlineMedium,
@@ -258,23 +263,19 @@ private fun WorkoutSessionHeader(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Progress bar
             LinearProgressIndicator(
-                progress = session.completionPercentage / 100f,
+                progress = { session.completionPercentage / 100f },
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primary
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Control buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                // Use Center arrangement to center the items horizontally
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Pause/Resume button
                 OutlinedButton(onClick = { if (isPaused) onResumeClick() else onPauseClick() }) {
                     Icon(
                         imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
@@ -282,7 +283,6 @@ private fun WorkoutSessionHeader(
                     )
                 }
 
-                // Stop Button
                 Button(
                     onClick = onStopClick,
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -290,115 +290,6 @@ private fun WorkoutSessionHeader(
                     Icon(imageVector = Icons.Default.Stop, contentDescription = "Stop")
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun WorkoutContent(
-    session: WorkoutSession,
-    currentExerciseIndex: Int,
-    currentSetIndex: Int,
-    onWeightChange: (Float) -> Unit,
-    onRepsChange: (Int) -> Unit,
-    onCompleteSet: () -> Unit,
-    onSkipSet: () -> Unit,
-    onReplaceExercise: () -> Unit,
-    onAddSet: () -> Unit,
-    onRemoveSet: () -> Unit,
-    currentWeight: Float,
-    currentReps: Int,
-    uiState: WorkoutSessionState,
-    onShowCompleteDialog: () -> Unit,
-    isLoading: Boolean,
-    modifier: Modifier = Modifier,
-    viewModel: WorkoutSessionViewModel
-) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Current exercise card
-        item {
-            if (currentExerciseIndex < session.exercises.size) {
-                val currentExercise = session.exercises[currentExerciseIndex]
-                CurrentExerciseCard(
-                    exercise = currentExercise,
-                    currentSetIndex = currentSetIndex,
-                    currentWeight = currentWeight,
-                    currentReps = currentReps,
-                    onWeightChange = onWeightChange,
-                    onRepsChange = onRepsChange,
-                    onCompleteSet = onCompleteSet,
-                    onSkipSet = onSkipSet,
-                    onReplaceExercise = onReplaceExercise,
-                    onAddSet = onAddSet,
-                    onRemoveSet = onRemoveSet,
-                    isLoading = isLoading,
-                    weightUnit = uiState.weightUnit,
-                    onToggleUnit = { viewModel.toggleWeightUnit() },
-                )
-            }
-        }
-
-        // Exercise list overview
-        item {
-            Text(
-                text = "📋 Workout Overview",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(top = 8.dp)
-            )
-        }
-
-        itemsIndexed(session.exercises) { index, exercise ->
-            ExerciseOverviewCard(
-                exercise = exercise,
-                isCurrentExercise = index == currentExerciseIndex,
-                exerciseNumber = index + 1
-            )
-        }
-
-        item {
-            // This button will only appear when all sets are completed.
-            AnimatedVisibility(
-                visible = uiState.isAllSetsCompleted,
-                enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
-                        slideInVertically(animationSpec = tween(durationMillis = 500)) { it / 2 }
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "🔥 All Sets Completed!",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    // The big green checkmark button
-                    FloatingActionButton(
-                        onClick = onShowCompleteDialog,
-                        containerColor = Color(0xFF2E7D32), // A nice green color
-                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
-                        shape = MaterialTheme.shapes.large,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Check,
-                            contentDescription = "Complete Workout",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Bottom spacing
-        item {
-            Spacer(modifier = Modifier.height(80.dp)) // Space for bottom bar
         }
     }
 }
@@ -413,17 +304,17 @@ private fun CurrentExerciseCard(
     onRepsChange: (Int) -> Unit,
     onCompleteSet: () -> Unit,
     onSkipSet: () -> Unit,
-    onReplaceExercise: () -> Unit,
     onAddSet: () -> Unit,
     onRemoveSet: () -> Unit,
     isLoading: Boolean,
     weightUnit: WeightUnit,
-    onToggleUnit: () -> Unit
+    onToggleUnit: () -> Unit,
+    onInfoClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant1),
+            .clip(HandDrawnShapes.medium),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         )
@@ -431,37 +322,37 @@ private fun CurrentExerciseCard(
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
-            // Exercise header
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = exercise.exerciseName,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                exercise.imageUrl?.let { imageUrl ->
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = "Exercise Image",
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
                     )
-                    Text(
-                        text = "Set ${currentSetIndex + 1} of ${exercise.plannedSets.size}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
 
-                // Replace exercise button
-//                IconButton(onClick = onReplaceExercise) {
-//                    Icon(
-//                        imageVector = Icons.Default.SwapHoriz,
-//                        contentDescription = "Replace exercise"
-//                    )
-//                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(text = exercise.exerciseName, style = MaterialTheme.typography.titleLarge)
+                    Text(text = "Set ${currentSetIndex + 1}", style = MaterialTheme.typography.bodyMedium)
+                }
+
+                IconButton(onClick = onInfoClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "View exercise details",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Set management
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -472,7 +363,7 @@ private fun CurrentExerciseCard(
                     style = MaterialTheme.typography.titleMedium
                 )
 
-                Row (verticalAlignment = Alignment.CenterVertically)
+                Row(verticalAlignment = Alignment.CenterVertically)
                 {
                     IconButton(
                         onClick = onRemoveSet,
@@ -495,7 +386,6 @@ private fun CurrentExerciseCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Current set target
             if (currentSetIndex < exercise.plannedSets.size) {
                 val targetSet = exercise.plannedSets[currentSetIndex]
                 Text(
@@ -507,12 +397,10 @@ private fun CurrentExerciseCard(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // Input fields
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Helper to calculate and format the weight in the currently selected unit.
                 val weightInCurrentUnit by remember(currentWeight, weightUnit) {
                     derivedStateOf {
                         val converted = if (weightUnit == WeightUnit.LB) {
@@ -520,16 +408,13 @@ private fun CurrentExerciseCard(
                         } else {
                             currentWeight
                         }
-                        // Format to one decimal place if not zero.
                         if (converted > 0) String.format("%.1f", converted) else ""
                     }
                 }
-                // Weight input field
                 OutlinedTextField(
                     value = weightInCurrentUnit,
                     onValueChange = { newValue ->
                         val parsedValue = newValue.toFloatOrNull() ?: 0f
-                        // Convert the user's input back to KG for consistent storage.
                         val weightInKg = if (weightUnit == WeightUnit.LB) {
                             parsedValue / 2.20462f
                         } else {
@@ -541,18 +426,17 @@ private fun CurrentExerciseCard(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.weight(1f),
                     enabled = !isLoading,
-                    // The trailing icon now uses the passed-in parameters.
                     trailingIcon = {
                         Row(
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .clickable { onToggleUnit() } // Use the passed-in lambda
+                                .clickable { onToggleUnit() }
                                 .padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = weightUnit.displayName, // Use the passed-in unit
+                                text = weightUnit.displayName,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -566,8 +450,6 @@ private fun CurrentExerciseCard(
                     }
                 )
 
-
-                // Reps input
                 OutlinedTextField(
                     value = if (currentReps > 0) currentReps.toString() else "",
                     onValueChange = { value ->
@@ -582,17 +464,14 @@ private fun CurrentExerciseCard(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally)
             ) {
-                // Complete Set Button
                 Button(onClick = onCompleteSet, modifier = Modifier.weight(2f)) {
                     Icon(imageVector = Icons.Rounded.Check, contentDescription = "Complete Set")
                 }
 
-                // Skip Button
                 OutlinedButton(onClick = onSkipSet, modifier = Modifier.weight(1f)) {
                     Icon(imageVector = Icons.Default.SkipNext, contentDescription = "Skip Set")
                 }
@@ -624,12 +503,11 @@ private fun RestScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Circular progress
         Box(
             contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator(
-                progress = if (totalRestTime > 0) (totalRestTime - remainingTime).toFloat() / totalRestTime else 0f,
+                progress = { if (totalRestTime > 0) (totalRestTime - remainingTime).toFloat() / totalRestTime else 0f },
                 modifier = Modifier.size(200.dp),
                 strokeWidth = 8.dp,
                 color = MaterialTheme.colorScheme.primary
@@ -645,27 +523,32 @@ private fun RestScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Time adjustment buttons
         Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             OutlinedButton(onClick = { onAdjustTime(-30) }) {
-                Text("-30s")
+                Text("-30")
             }
             OutlinedButton(onClick = { onAdjustTime(-10) }) {
-                Text("-10s")
+                Text("-10")
             }
             OutlinedButton(onClick = { onAdjustTime(10) }) {
-                Text("+10s")
+                Text("+10")
             }
             OutlinedButton(onClick = { onAdjustTime(30) }) {
-                Text("+30s")
+                Text("+30")
             }
         }
+        
+        Text(
+            text = "seconds",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp)
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Skip rest button
         Button(
             onClick = onSkipRest,
             modifier = Modifier.fillMaxWidth(0.6f)
@@ -684,12 +567,19 @@ private fun RestScreen(
 private fun ExerciseOverviewCard(
     exercise: ExecutedExercise,
     isCurrentExercise: Boolean,
-    exerciseNumber: Int
+    exerciseNumber: Int,
+    onInfoClick: () -> Unit,
+    onExerciseSelected: () -> Unit
 ) {
+    val completedSets = exercise.executedSets.count { it.isCompleted }
+    val totalSets = exercise.plannedSets.size
+    val progress = if (totalSets > 0) completedSets.toFloat() / totalSets.toFloat() else 0f
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(HandDrawnShapes.cardVariant2),
+            .clip(HandDrawnShapes.medium)
+            .clickable { onExerciseSelected() },
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrentExercise) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -698,128 +588,85 @@ private fun ExerciseOverviewCard(
             }
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Exercise number
-            Surface(
-                shape = CircleShape,
-                color = if (isCurrentExercise) {
-                    MaterialTheme.colorScheme.primary
-                } else if (exercise.isCompleted) {
-                    MaterialTheme.colorScheme.tertiary
-                } else {
-                    MaterialTheme.colorScheme.outline
-                },
-                modifier = Modifier.size(32.dp)
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    if (exercise.isCompleted) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onTertiary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                Surface(
+                    shape = CircleShape,
+                    color = if (isCurrentExercise) {
+                        MaterialTheme.colorScheme.primary
+                    } else if (exercise.isCompleted) {
+                        MaterialTheme.colorScheme.tertiary
                     } else {
-                        Text(
-                            text = exerciseNumber.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isCurrentExercise) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                        )
+                        MaterialTheme.colorScheme.outline
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        if (exercise.isCompleted) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onTertiary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        } else {
+                            Text(
+                                text = exerciseNumber.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isCurrentExercise) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-            // Exercise info
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = exercise.exerciseName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = if (isCurrentExercise) FontWeight.Bold else FontWeight.Medium
-                )
-
-                val completedSets = exercise.executedSets.count { it.isCompleted }
-                val totalSets = exercise.plannedSets.size
-                Text(
-                    text = "Sets: $completedSets/$totalSets",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            // Status indicator
-            if (isCurrentExercise) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Current exercise",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            } else if (exercise.isCompleted) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Completed",
-                    tint = MaterialTheme.colorScheme.tertiary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun WorkoutBottomBar(
-    onCompleteWorkout: () -> Unit,
-    onShowSettings: () -> Unit,
-    isCompleteEnabled: Boolean,
-    isLoading: Boolean
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 8.dp,
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            // The arrangement is now just centered
-            horizontalArrangement = Arrangement.Center
-        ) {
-//            OutlinedButton(onClick = onShowSettings) {
-//                Icon(
-//                    imageVector = Icons.Default.Settings,
-//                    contentDescription = null,
-//                    modifier = Modifier.size(18.dp)
-//                )
-//                Spacer(modifier = Modifier.width(8.dp))
-//                Text("Settings")
-//            }
-
-            Button(
-                onClick = onCompleteWorkout,
-                enabled = isCompleteEnabled && !isLoading,
-                modifier = Modifier.weight(1f)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = exercise.exerciseName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = if (isCurrentExercise) FontWeight.Bold else FontWeight.Medium
                     )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Flag,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
+
+                    Text(
+                        text = "Sets: $completedSets/$totalSets",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Complete Workout")
+
+                if (isCurrentExercise) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Current exercise",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                } else if (exercise.isCompleted) {
+                    Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Completed",
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+
+                IconButton(onClick = onInfoClick) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "View exercise details",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+            if (totalSets > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -849,17 +696,12 @@ private fun AbandonWorkoutDialog(
     )
 }
 
-/**
- * This is the fixed dialog that now accepts a nullable session
- * and includes a safety check.
- */
 @Composable
 private fun CompleteWorkoutDialog(
-    session: WorkoutSession?, // The parameter type is now nullable
+    session: WorkoutSession?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // Add a guard clause. If for any reason the session is null, do not show the dialog.
     if (session == null) return
 
     AlertDialog(
@@ -871,7 +713,11 @@ private fun CompleteWorkoutDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text("Total volume: ${session.totalVolume.toInt()} kg")
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Mark this workout as complete?")
+                if (session.isPlanModified) {
+                    Text("Do you want to save the changes to your workout plan?")
+                } else {
+                    Text("Mark this workout as complete?")
+                }
             }
         },
         confirmButton = {
@@ -911,7 +757,6 @@ private fun WorkoutSettingsDialog(
     )
 }
 
-// Utility function
 private fun formatTime(timeInMillis: Long): String {
     val totalSeconds = timeInMillis / 1000
     val hours = totalSeconds / 3600
@@ -949,39 +794,33 @@ private fun FinishWorkoutConfirmationDialog(
     )
 }
 
-
-/**
- * An overlay that displays personal record notifications with a staggered animation.
- */
 @Composable
 fun BoxScope.PrNotificationOverlay(
     records: List<PersonalRecord>,
     onFinished: () -> Unit
 ) {
-    // Manages which notifications are currently visible on screen.
     val visibleNotifications = remember { mutableStateListOf<PersonalRecord>() }
 
-    // This effect triggers whenever a new list of records comes from the ViewModel.
     LaunchedEffect(records) {
         if (records.isNotEmpty()) {
-            for (record in records) {
+            // Add records sequentially with delays
+            records.forEachIndexed { index, record ->
                 visibleNotifications.add(record)
-                // Stagger the appearance of each notification.
-                delay(500)
+                if (index < records.size - 1) {
+                    delay(1000) // 1 second delay between appearances
+                }
             }
-            // After all notifications have been shown, wait a bit then clear the event.
-            delay(4000)
+            // Wait for all notifications to finish before calling onFinished
+            delay(6000) // Wait 6 seconds after last appearance
             onFinished()
         }
     }
 
-    // This effect manages the auto-dismissal of each individual notification.
     visibleNotifications.forEach { record ->
-        key(record.id) { // Use key to ensure LaunchedEffect is unique for each record
+        key(record.id) {
             LaunchedEffect(Unit) {
-                // Wait for the display duration.
-                delay(3000)
-                // Remove the record from the visible list, triggering the exit animation.
+                // Keep each notification visible for 5 seconds
+                delay(5000)
                 visibleNotifications.remove(record)
             }
         }
@@ -995,9 +834,8 @@ fun BoxScope.PrNotificationOverlay(
         verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.Bottom)
     ) {
         visibleNotifications.forEach { record ->
-            // The AnimatedVisibility handles the enter/exit animations.
             AnimatedVisibility(
-                visible = true, // It's always visible as long as it's in the list
+                visible = true,
                 enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn(),
                 exit = slideOutVertically(targetOffsetY = { it / 2 }) + fadeOut()
             ) {
@@ -1007,9 +845,6 @@ fun BoxScope.PrNotificationOverlay(
     }
 }
 
-/**
- * The UI for a single personal record celebration card.
- */
 @Composable
 private fun PrNotificationCard(record: PersonalRecord) {
     Card(
@@ -1032,7 +867,6 @@ private fun PrNotificationCard(record: PersonalRecord) {
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                // Display a user-friendly description of the record.
                 val recordText = when (record.recordType) {
                     RecordType.MAX_WEIGHT -> "Max Weight: ${record.weight} kg"
                     RecordType.MAX_REPS -> "Max Reps: ${record.reps}"
@@ -1048,22 +882,21 @@ private fun PrNotificationCard(record: PersonalRecord) {
     }
 }
 
-
 @Composable
 private fun WorkoutSessionContent(
     paddingValues: PaddingValues,
     session: WorkoutSession,
     uiState: WorkoutSessionState,
-    viewModel: WorkoutSessionViewModel
+    viewModel: WorkoutSessionViewModel,
+    onExerciseInfoClick: (Int) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(paddingValues) // Apply padding from Scaffold
+            .padding(paddingValues)
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Item 1: The header
         item {
             WorkoutSessionHeader(
                 session = session,
@@ -1071,12 +904,10 @@ private fun WorkoutSessionContent(
                 onPauseClick = { viewModel.pauseWorkout() },
                 onResumeClick = { viewModel.resumeWorkout() },
                 onStopClick = { viewModel.showAbandonDialog() },
-                isPaused = session.status == WorkoutStatus.PAUSED,
-                isLoading = uiState.isLoading
+                isPaused = session.status == WorkoutStatus.PAUSED
             )
         }
 
-        // Item 2: The current exercise card (no AnimatedContent wrapper needed anymore)
         item {
             session.exercises.getOrNull(uiState.currentExerciseIndex)?.let { currentExercise ->
                 CurrentExerciseCard(
@@ -1088,93 +919,98 @@ private fun WorkoutSessionContent(
                     onRepsChange = { reps -> viewModel.updateCurrentReps(reps) },
                     onCompleteSet = { viewModel.completeCurrentSet() },
                     onSkipSet = { viewModel.skipCurrentSet() },
-                    onReplaceExercise = { viewModel.showReplaceExerciseDialog() },
                     onAddSet = { viewModel.addSetToCurrentExercise() },
                     onRemoveSet = { viewModel.removeSetFromCurrentExercise() },
                     isLoading = uiState.isLoading,
                     weightUnit = uiState.weightUnit,
-                    onToggleUnit = { viewModel.toggleWeightUnit() }
+                    onToggleUnit = { viewModel.toggleWeightUnit() },
+                    onInfoClick = { onExerciseInfoClick(currentExercise.exerciseId) }
                 )
             }
         }
 
-            // Item 3: The workout overview section title
-            item {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
                     text = "📋 Workout Overview",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
                 )
-            }
-
-            // Items 4...N: The list of all exercises in the overview
-            itemsIndexed(session.exercises) { index, exercise ->
-                ExerciseOverviewCard(
-                    exercise = exercise,
-                    isCurrentExercise = index == uiState.currentExerciseIndex,
-                    exerciseNumber = index + 1
-                )
-            }
-
-            // Final Item: The conditional "All Sets Completed" confirmation button
-            item {
-                AnimatedVisibility(
-                    visible = uiState.isAllSetsCompleted,
-                    enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
-                            slideInVertically(animationSpec = tween(durationMillis = 500)) { it / 2 }
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "🔥 All Sets Completed!",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        // The big green checkmark button
-                        FloatingActionButton(
-                            onClick = { viewModel.showCompleteDialog() },
-                            containerColor = Color(0xFF2E7D32), // A nice green color
-                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = "Complete Workout",
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
+                OutlinedButton(onClick = { viewModel.showExerciseLibrary() }) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add Exercise")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add")
                 }
             }
         }
 
-        // --- The Rest Screen as a full-screen overlay ---
-        // This will appear on top of the LazyColumn when isCurrentlyResting is true.
-        AnimatedVisibility(
-            visible = uiState.isCurrentlyResting,
-            enter = fadeIn(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300))
-        ) {
-            RestScreen(
-                remainingTime = uiState.restTimeRemaining,
-                totalRestTime = uiState.totalRestTime,
-                onSkipRest = { viewModel.skipRest() },
-                onAdjustTime = { adjustment -> viewModel.adjustRestTime(adjustment) },
-                // Add a background to cover the content behind it
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
-                    .clickable(enabled = false, onClick = {}) // Block clicks on content behind
+        itemsIndexed(session.exercises) { index, exercise ->
+            ExerciseOverviewCard(
+                exercise = exercise,
+                isCurrentExercise = index == uiState.currentExerciseIndex,
+                exerciseNumber = index + 1,
+                onInfoClick = { onExerciseInfoClick(exercise.exerciseId) },
+                onExerciseSelected = { viewModel.onExerciseSelected(index) }
             )
+        }
+
+        item {
+            AnimatedVisibility(
+                visible = uiState.isAllSetsCompleted,
+                enter = fadeIn(animationSpec = tween(durationMillis = 500)) +
+                        slideInVertically(animationSpec = tween(durationMillis = 500)) { it / 2 }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "🔥 All Sets Completed!",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    FloatingActionButton(
+                        onClick = { viewModel.showCompleteDialog() },
+                        containerColor = Color(0xFF2E7D32),
+                        elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Check,
+                            contentDescription = "Complete Workout",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
         }
     }
 
+    AnimatedVisibility(
+        visible = uiState.isCurrentlyResting,
+        enter = fadeIn(animationSpec = tween(300)),
+        exit = fadeOut(animationSpec = tween(300))
+    ) {
+        RestScreen(
+            remainingTime = uiState.restTimeRemaining,
+            totalRestTime = uiState.totalRestTime,
+            onSkipRest = { viewModel.skipRest() },
+            onAdjustTime = { adjustment -> viewModel.adjustRestTime(adjustment) },
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.98f))
+                .clickable(enabled = false, onClick = {})
+        )
+    }
+}
 
 @Composable
 private fun InvalidInputDialog(

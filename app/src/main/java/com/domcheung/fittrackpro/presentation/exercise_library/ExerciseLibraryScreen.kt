@@ -13,30 +13,30 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.domcheung.fittrackpro.data.model.Exercise
-import androidx.compose.material.icons.filled.FitnessCenter
+import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 
-/**
- * The main screen for the Exercise Library, allowing users to browse, filter, and select exercises.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExerciseLibraryScreen(
     viewModel: ExerciseLibraryViewModel = hiltViewModel(),
     onClose: () -> Unit,
-    onAddExercises: (Set<Int>) -> Unit
+    onAddExercises: (Set<Int>) -> Unit,
+    onExerciseClick: (Int) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val filteredExercises by viewModel.filteredExercises.collectAsState()
@@ -53,12 +53,11 @@ fun ExerciseLibraryScreen(
             )
         },
         bottomBar = {
-            // The bottom bar shows the count of selected exercises and the button to add them.
             AddExercisesBottomBar(
                 selectedCount = uiState.selectedExerciseIds.size,
                 onAddClick = {
                     onAddExercises(uiState.selectedExerciseIds)
-                    onClose() // Close the sheet after adding
+                    onClose()
                 }
             )
         }
@@ -68,16 +67,13 @@ fun ExerciseLibraryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // --- Primary Filter (Muscle Groups) ---
             MuscleGroupFilterList(
                 muscleGroups = uiState.muscleGroupFilters,
                 selectedMuscleGroup = uiState.selectedMuscleGroup,
                 onMuscleGroupSelected = viewModel::onMuscleGroupSelected
             )
 
-            // --- Main Content Area ---
             Column(modifier = Modifier.fillMaxSize()) {
-                // Search Bar
                 OutlinedTextField(
                     value = uiState.searchQuery,
                     onValueChange = viewModel::onSearchQueryChanged,
@@ -89,14 +85,12 @@ fun ExerciseLibraryScreen(
                     singleLine = true
                 )
 
-                // Secondary Filter (Equipment)
                 EquipmentFilterChips(
                     equipmentTypes = uiState.equipmentFilters,
                     selectedEquipment = uiState.selectedEquipment,
                     onEquipmentSelected = viewModel::onEquipmentSelected
                 )
 
-                // Exercise Grid
                 if (uiState.isLoading) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
@@ -105,7 +99,10 @@ fun ExerciseLibraryScreen(
                     ExerciseGrid(
                         exercises = filteredExercises,
                         selectedExerciseIds = uiState.selectedExerciseIds,
-                        onExerciseToggled = viewModel::onExerciseToggled
+                        onExerciseToggled = viewModel::onExerciseToggled,
+                        onExerciseInfoClicked = { exercise ->
+                            onExerciseClick(exercise.id)
+                        }
                     )
                 }
             }
@@ -113,9 +110,6 @@ fun ExerciseLibraryScreen(
     }
 }
 
-/**
- * Displays the vertical list of muscle groups for primary filtering.
- */
 @Composable
 private fun MuscleGroupFilterList(
     muscleGroups: List<String>,
@@ -145,9 +139,6 @@ private fun MuscleGroupFilterList(
     }
 }
 
-/**
- * Displays the horizontal, scrollable list of equipment filter chips.
- */
 @Composable
 private fun EquipmentFilterChips(
     equipmentTypes: List<String>,
@@ -168,14 +159,12 @@ private fun EquipmentFilterChips(
     }
 }
 
-/**
- * Displays the main grid of exercises.
- */
 @Composable
 private fun ExerciseGrid(
     exercises: List<Exercise>,
     selectedExerciseIds: Set<Int>,
-    onExerciseToggled: (Int) -> Unit
+    onExerciseToggled: (Int) -> Unit,
+    onExerciseInfoClicked: (Exercise) -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -188,64 +177,71 @@ private fun ExerciseGrid(
             ExerciseGridCard(
                 exercise = exercise,
                 isSelected = exercise.id in selectedExerciseIds,
-                onCardClick = { onExerciseToggled(exercise.id) }
+                onCardClick = { onExerciseToggled(exercise.id) },
+                onInfoClick = { onExerciseInfoClicked(exercise) }
             )
         }
     }
 }
 
-/**
- * A single card in the exercise grid.
- */
 @Composable
 private fun ExerciseGridCard(
     exercise: Exercise,
     isSelected: Boolean,
-    onCardClick: () -> Unit
+    onCardClick: () -> Unit,
+    onInfoClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
-            .aspectRatio(1f) // Makes the card square
+            .aspectRatio(1f)
             .border(
                 width = 2.dp,
                 color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                shape = MaterialTheme.shapes.medium
+                shape = HandDrawnShapes.medium
             ),
-        onClick = onCardClick,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        onClick = onCardClick
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // TODO: Replace with a GIF/Image later
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.secondaryContainer)
-            ) {
-                Icon(
-                    Icons.Default.FitnessCenter,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp).align(Alignment.Center),
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+            if (exercise.imageUrl != null) {
+                AsyncImage(
+                    model = exercise.imageUrl,
+                    contentDescription = exercise.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
             }
 
-            // Exercise Name overlay
+            if (exercise.imageUrl == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Icon(
+                        Icons.Default.FitnessCenter,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp).align(Alignment.Center),
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                    )
+                }
+            }
+
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
-                    .padding(8.dp),
-                contentAlignment = Alignment.BottomStart
+                    .fillMaxWidth()
+                    .align(Alignment.BottomStart)
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(8.dp)
             ) {
                 Text(
                     text = exercise.name,
                     color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2
                 )
             }
 
-            // Selection checkmark overlay
             if (isSelected) {
                 Box(
                     modifier = Modifier
@@ -261,13 +257,34 @@ private fun ExerciseGridCard(
                     )
                 }
             }
+
+            IconButton(
+                onClick = onInfoClick,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.6f),
+                            shape = HandDrawnShapes.small
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = "View Details",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }
 
-/**
- * The bottom bar that shows the number of selected items and the add button.
- */
 @Composable
 private fun AddExercisesBottomBar(
     selectedCount: Int,
