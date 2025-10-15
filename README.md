@@ -2,6 +2,8 @@
 
 FitTrackPro is a comprehensive Android application designed to help users track their fitness journeys, manage workout plans, monitor progress, and achieve their health goals. Built with modern Android development practices, it provides an intuitive interface for workout tracking, exercise libraries, and personal records management.
 
+![ezgif com-animated-gif-maker](https://github.com/user-attachments/assets/293e82a5-5793-45d0-958c-d6e4cf02fd3a)
+
 ## Features
 
 - **User Authentication**: Secure login and registration system.
