@@ -7,3 +7,9 @@ plugins {
     id("com.google.dagger.hilt.android") version "2.50" apply false
     id("com.google.gms.google-services") version "4.4.3" apply false
 }
+
+tasks.register("ciCheck") {
+    group = "verification"
+    description = "Runs baseline CI checks (assembleDebug + testDebugUnitTest)."
+    dependsOn(":app:assembleDebug", ":app:testDebugUnitTest")
+}

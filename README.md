@@ -51,6 +51,13 @@ FitTrackPro is a comprehensive Android application designed to help users track 
 
 For detailed usage, refer to the in-app guides or documentation.
 
+## Development Automation
+
+- Local CI check: `./scripts/ci-check.sh` (or `cmd.exe /C "gradlew.bat ciCheck --no-daemon --stacktrace"` on Windows)
+- Auto pre-push validation: install once with `./scripts/install-git-hooks.sh` or `powershell -ExecutionPolicy Bypass -File .\scripts\install-git-hooks.ps1`
+- Pull-request CI: `.github/workflows/android-ci.yml` runs build + unit tests automatically
+- Full workflow guide: `docs/development-workflow.md`
+
 ## Project Structure
 
 - `app/src/main/java/com/domcheung/fittrackpro/`: Core application code
