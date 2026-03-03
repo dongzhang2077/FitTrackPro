@@ -1,25 +1,20 @@
 package com.domcheung.fittrackpro.data.local
 
-import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Extension to create DataStore instance
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "user_preferences")
-
 @Singleton
 class UserPreferencesManager @Inject constructor(
-    private val context: Context
+    private val dataStore: DataStore<Preferences>
 ) {
     // Preference keys
     private object PreferenceKeys {
@@ -43,7 +38,7 @@ class UserPreferencesManager @Inject constructor(
         userUid: String = "",
         userName: String = ""
     ) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[PreferenceKeys.IS_LOGGED_IN] = isLoggedIn
             preferences[PreferenceKeys.USER_EMAIL] = userEmail
             preferences[PreferenceKeys.USER_UID] = userUid
@@ -52,47 +47,47 @@ class UserPreferencesManager @Inject constructor(
     }
 
     // Get login state
-    val isLoggedIn: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val isLoggedIn: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.IS_LOGGED_IN] ?: false
     }
 
     // Get user email
-    val userEmail: Flow<String> = context.dataStore.data.map { preferences ->
+    val userEmail: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_EMAIL] ?: ""
     }
 
     // Get user UID
-    val userUid: Flow<String> = context.dataStore.data.map { preferences ->
+    val userUid: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_UID] ?: ""
     }
 
     // Get user name
-    val userName: Flow<String> = context.dataStore.data.map { preferences ->
+    val userName: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_NAME] ?: ""
     }
 
     // Get user avatar URL
-    val userAvatarUrl: Flow<String> = context.dataStore.data.map { preferences ->
+    val userAvatarUrl: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_AVATAR_URL] ?: ""
     }
 
     // Get user current weight
-    val userCurrentWeight: Flow<String> = context.dataStore.data.map { preferences ->
+    val userCurrentWeight: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_CURRENT_WEIGHT] ?: ""
     }
 
     // Get user target weight
-    val userTargetWeight: Flow<String> = context.dataStore.data.map { preferences ->
+    val userTargetWeight: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_TARGET_WEIGHT] ?: ""
     }
 
     // Get user height
-    val userHeight: Flow<String> = context.dataStore.data.map { preferences ->
+    val userHeight: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_HEIGHT] ?: ""
     }
 
     // Get user initial weight
-    val userInitialWeight: Flow<String> = context.dataStore.data.map { preferences ->
+    val userInitialWeight: Flow<String> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.USER_INITIAL_WEIGHT] ?: ""
     }
 
@@ -105,7 +100,7 @@ class UserPreferencesManager @Inject constructor(
         height: String = "",
         initialWeight: String = ""
     ) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             // Only update name if it's provided (not null)
             name?.let {
                 preferences[PreferenceKeys.USER_NAME] = it
@@ -120,7 +115,7 @@ class UserPreferencesManager @Inject constructor(
 
     // Update user avatar URL
     suspend fun updateUserAvatar(avatarUrl: String) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[PreferenceKeys.USER_AVATAR_URL] = avatarUrl
         }
     }
@@ -131,7 +126,7 @@ class UserPreferencesManager @Inject constructor(
         targetWeight: String,
         initialWeight: String = ""
     ) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             if (currentWeight.isNotBlank()) {
                 preferences[PreferenceKeys.USER_CURRENT_WEIGHT] = currentWeight
             }
@@ -145,39 +140,39 @@ class UserPreferencesManager @Inject constructor(
     }
 
     // Get onboarding completion status
-    val isOnboardingCompleted: Flow<Boolean> = context.dataStore.data.map { preferences ->
+    val isOnboardingCompleted: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.ONBOARDING_COMPLETED] ?: false
     }
 
     // Mark onboarding as completed
     suspend fun setOnboardingCompleted(completed: Boolean) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[PreferenceKeys.ONBOARDING_COMPLETED] = completed
         }
     }
 
     // Clear all user data (for logout)
     suspend fun clearUserData() {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences.clear()
         }
     }
 
     // Get user weekly workout goal
-    val weeklyWorkoutGoal: Flow<Int> = context.dataStore.data.map { preferences ->
+    val weeklyWorkoutGoal: Flow<Int> = dataStore.data.map { preferences ->
         preferences[PreferenceKeys.WEEKLY_WORKOUT_GOAL] ?: 3 // Default to 3 workouts per week
     }
     
     // Save user weekly workout goal
     suspend fun saveWeeklyWorkoutGoal(goal: Int) {
-        context.dataStore.edit { preferences ->
+        dataStore.edit { preferences ->
             preferences[PreferenceKeys.WEEKLY_WORKOUT_GOAL] = goal
         }
     }
     
     // Check if user data exists - simplified version
     suspend fun hasUserData(): Boolean {
-        return context.dataStore.data.map { preferences ->
+        return dataStore.data.map { preferences ->
             preferences[PreferenceKeys.IS_LOGGED_IN] ?: false
         }.first() // Use first() to get single value instead of collect
     }
