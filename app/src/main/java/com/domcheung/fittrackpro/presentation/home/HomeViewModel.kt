@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
+import com.domcheung.fittrackpro.domain.model.DailyWorkoutRecommendation
+import com.domcheung.fittrackpro.domain.model.RecommendationSource
 import com.domcheung.fittrackpro.domain.usecase.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -88,6 +90,33 @@ class HomeViewModel @Inject constructor(
         if (goal > 0) (count.toFloat() / goal.toFloat()) * 100f else 0f
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
 
+    val todaysRecommendation: StateFlow<DailyWorkoutRecommendation> = authRepository.isLoggedIn()
+        .flatMapLatest { isLoggedIn ->
+            if (!isLoggedIn) {
+                flowOf(
+                    DailyWorkoutRecommendation(
+                        plan = null,
+                        reason = "Sign in to receive a personalized recommendation.",
+                        source = RecommendationSource.NONE
+                    )
+                )
+            } else {
+                flow {
+                    val userId = authRepository.getCurrentUser()?.uid.orEmpty()
+                    emit(getTodaysRecommendedPlanUseCase(userId))
+                }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = DailyWorkoutRecommendation(
+                plan = null,
+                reason = "Preparing your recommendation...",
+                source = RecommendationSource.NONE
+            )
+        )
+
     fun getUserDisplayName(): String {
         return displayName.value
     }
@@ -95,9 +124,11 @@ class HomeViewModel @Inject constructor(
     fun quickStartWorkout() {
         viewModelScope.launch {
             _uiState.update { it.copy(isAnyOperationInProgress = true) }
-            val plan = getTodaysRecommendedPlan()
+            val userId = authRepository.getCurrentUser()?.uid.orEmpty()
+            val recommendation = getTodaysRecommendedPlanUseCase(userId)
+            val plan = recommendation.plan
             if (plan != null) {
-                val result = startWorkoutSessionUseCase(plan.id, authRepository.getCurrentUser()?.uid ?: "")
+                val result = startWorkoutSessionUseCase(plan.id, userId)
                 result.fold(
                     onSuccess = { session ->
                         _uiState.update {
@@ -163,8 +194,6 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
-
-    suspend fun getTodaysRecommendedPlan() = getTodaysRecommendedPlanUseCase(authRepository.getCurrentUser()?.uid ?: "")
 
     fun getWeeklyProgress(): Float {
         return weeklyProgress.value

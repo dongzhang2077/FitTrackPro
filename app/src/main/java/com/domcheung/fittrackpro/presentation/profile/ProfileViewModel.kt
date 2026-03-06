@@ -3,6 +3,8 @@ package com.domcheung.fittrackpro.presentation.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
+import com.domcheung.fittrackpro.data.reminder.ReminderSettings
+import com.domcheung.fittrackpro.data.reminder.WorkoutReminderScheduler
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import com.domcheung.fittrackpro.domain.usecase.GetWorkoutStatisticsUseCase
 import com.domcheung.fittrackpro.domain.usecase.SyncDataUseCase
@@ -21,7 +23,8 @@ class ProfileViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userPreferencesManager: UserPreferencesManager,
     private val getWorkoutStatisticsUseCase: GetWorkoutStatisticsUseCase,
-    private val syncDataUseCase: SyncDataUseCase
+    private val syncDataUseCase: SyncDataUseCase,
+    private val workoutReminderScheduler: WorkoutReminderScheduler
 ) : ViewModel() {
 
     // UI State
@@ -97,6 +100,41 @@ class ProfileViewModel @Inject constructor(
             initialValue = "80 kg"
         )
 
+    val reminderEnabled: StateFlow<Boolean> = userPreferencesManager.reminderEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val reminderHour: StateFlow<Int> = userPreferencesManager.reminderHour
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 19
+        )
+
+    val reminderMinute: StateFlow<Int> = userPreferencesManager.reminderMinute
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val reminderSelectedDays: StateFlow<Set<Int>> = userPreferencesManager.reminderSelectedDays
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = setOf(1, 2, 3, 4, 5, 6, 7)
+        )
+
+    private val reminderSettings: StateFlow<ReminderSettings> = userPreferencesManager.reminderSettings
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = ReminderSettings()
+        )
+
     // Workout statistics for profile summary
     val workoutStatistics: StateFlow<WorkoutStatistics?> = userUid
         .flatMapLatest { uid ->
@@ -166,6 +204,15 @@ class ProfileViewModel @Inject constructor(
         loadProfileData()
         checkSyncStatus()
         performAutoSyncIfNeeded()
+        observeReminderSettings()
+    }
+
+    private fun observeReminderSettings() {
+        viewModelScope.launch {
+            reminderSettings.collect { settings ->
+                workoutReminderScheduler.syncReminderSchedule(settings)
+            }
+        }
     }
 
     /**
@@ -230,6 +277,8 @@ class ProfileViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 println("DEBUG: ProfileViewModel - Starting sign out process")
+
+                workoutReminderScheduler.cancelReminderSchedule()
 
                 // Call repository sign out (which handles both Firebase and DataStore)
                 authRepository.signOut()
@@ -407,6 +456,48 @@ class ProfileViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isUpdatingProfile = false,
                     errorMessage = e.message ?: "Failed to update weight goals"
+                )
+            }
+        }
+    }
+
+    fun updateReminderEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesManager.updateReminderEnabled(enabled)
+        }
+    }
+
+    fun updateReminderTime(hour: Int, minute: Int) {
+        viewModelScope.launch {
+            userPreferencesManager.updateReminderTime(hour, minute)
+        }
+    }
+
+    fun toggleReminderDay(day: Int) {
+        if (day !in 1..7) {
+            return
+        }
+
+        viewModelScope.launch {
+            val currentDays = reminderSelectedDays.value
+            val updated = if (day in currentDays) {
+                val candidate = currentDays - day
+                if (candidate.isEmpty()) currentDays else candidate
+            } else {
+                currentDays + day
+            }
+
+            userPreferencesManager.updateReminderSelectedDays(updated)
+        }
+    }
+
+    fun triggerTestReminderNow() {
+        viewModelScope.launch {
+            try {
+                workoutReminderScheduler.triggerTestReminder(reminderSelectedDays.value)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    errorMessage = e.message ?: "Failed to send test reminder"
                 )
             }
         }

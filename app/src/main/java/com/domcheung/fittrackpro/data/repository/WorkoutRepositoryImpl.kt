@@ -806,52 +806,162 @@ class WorkoutRepositoryImpl @Inject constructor(
         }
     }
 
-    /**
-     * Creates a list of sample workout plans.
-     */
     private fun createSampleWorkoutPlans(userId: String): List<WorkoutPlan> {
-        val fullBodyPlan = WorkoutPlan(
-            id = UUID.randomUUID().toString(),
-            name = "Full Body Strength - Beginner",
-            description = "A great starting point to build foundational strength.",
-            targetMuscleGroups = listOf("Full Body", "Strength"),
-            estimatedDuration = 45,
-            exercises = listOf(
-                PlannedExercise(
-                    exerciseId = 2, // Squat
-                    exerciseName = "Squat",
-                    orderIndex = 0,
-                    sets = listOf(
-                        PlannedSet(setNumber = 1, targetWeight = 40f, targetReps = 8),
-                        PlannedSet(setNumber = 2, targetWeight = 40f, targetReps = 8),
-                        PlannedSet(setNumber = 3, targetWeight = 40f, targetReps = 8)
+        fun buildExercise(
+            exerciseId: Int,
+            exerciseName: String,
+            orderIndex: Int,
+            targets: List<Pair<Float, Int>>
+        ): PlannedExercise {
+            return PlannedExercise(
+                exerciseId = exerciseId,
+                exerciseName = exerciseName,
+                orderIndex = orderIndex,
+                sets = targets.mapIndexed { index, pair ->
+                    PlannedSet(
+                        setNumber = index + 1,
+                        targetWeight = pair.first,
+                        targetReps = pair.second
                     )
+                }
+            )
+        }
+
+        fun template(
+            name: String,
+            description: String,
+            targetMuscleGroups: List<String>,
+            estimatedDuration: Int,
+            tags: List<String>,
+            exercises: List<PlannedExercise>
+        ): WorkoutPlan {
+            return WorkoutPlan(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                description = description,
+                targetMuscleGroups = targetMuscleGroups,
+                estimatedDuration = estimatedDuration,
+                exercises = exercises,
+                createdBy = userId,
+                isTemplate = true,
+                tags = tags,
+                syncedToFirebase = false
+            )
+        }
+
+        return listOf(
+            template(
+                name = "Full Body Starter Loop",
+                description = "Balanced beginner full-body plan for consistent progress.",
+                targetMuscleGroups = listOf("Full Body", "Beginner"),
+                estimatedDuration = 45,
+                tags = listOf(
+                    "goal_general_fitness",
+                    "frequency_3",
+                    "full_body",
+                    "intensity_light",
+                    "beginner",
+                    "equipment_dumbbell_only"
                 ),
-                PlannedExercise(
-                    exerciseId = 1, // Bench Press
-                    exerciseName = "Bench Press",
-                    orderIndex = 1,
-                    sets = listOf(
-                        PlannedSet(setNumber = 1, targetWeight = 30f, targetReps = 8),
-                        PlannedSet(setNumber = 2, targetWeight = 30f, targetReps = 8),
-                        PlannedSet(setNumber = 3, targetWeight = 30f, targetReps = 8)
-                    )
-                ),
-                PlannedExercise(
-                    exerciseId = 3, // Deadlift
-                    exerciseName = "Deadlift",
-                    orderIndex = 2,
-                    sets = listOf(
-                        PlannedSet(setNumber = 1, targetWeight = 50f, targetReps = 5),
-                        PlannedSet(setNumber = 2, targetWeight = 50f, targetReps = 5)
-                    )
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(30f to 10, 30f to 10, 30f to 10)),
+                    buildExercise(1, "Bench Press", 1, listOf(20f to 10, 20f to 10, 20f to 10)),
+                    buildExercise(3, "Deadlift", 2, listOf(35f to 8, 35f to 8))
                 )
             ),
-            createdBy = userId,
-            isTemplate = true,
-            syncedToFirebase = false
+            template(
+                name = "Push Hypertrophy Base",
+                description = "Chest and upper push focus for muscle gain.",
+                targetMuscleGroups = listOf("Chest", "Shoulders", "Triceps"),
+                estimatedDuration = 50,
+                tags = listOf(
+                    "goal_muscle_gain",
+                    "frequency_4",
+                    "push",
+                    "chest",
+                    "intensity_medium",
+                    "hypertrophy"
+                ),
+                exercises = listOf(
+                    buildExercise(1, "Bench Press", 0, listOf(35f to 8, 37.5f to 8, 40f to 6)),
+                    buildExercise(2, "Squat", 1, listOf(35f to 8, 35f to 8)),
+                    buildExercise(3, "Deadlift", 2, listOf(40f to 6, 40f to 6))
+                )
+            ),
+            template(
+                name = "Pull Back Builder",
+                description = "Back and posterior-chain focused pull session.",
+                targetMuscleGroups = listOf("Back", "Biceps", "Posterior Chain"),
+                estimatedDuration = 50,
+                tags = listOf(
+                    "goal_muscle_gain",
+                    "frequency_4",
+                    "pull",
+                    "back",
+                    "intensity_medium"
+                ),
+                exercises = listOf(
+                    buildExercise(3, "Deadlift", 0, listOf(45f to 5, 50f to 5, 50f to 5)),
+                    buildExercise(2, "Squat", 1, listOf(30f to 10, 30f to 10)),
+                    buildExercise(1, "Bench Press", 2, listOf(25f to 12, 25f to 12))
+                )
+            ),
+            template(
+                name = "Leg Strength Foundation",
+                description = "Leg-dominant lower-body plan for strength progression.",
+                targetMuscleGroups = listOf("Legs", "Glutes", "Core"),
+                estimatedDuration = 55,
+                tags = listOf(
+                    "goal_strength",
+                    "frequency_3",
+                    "legs",
+                    "intensity_heavy",
+                    "compound"
+                ),
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(45f to 6, 50f to 5, 52.5f to 5)),
+                    buildExercise(3, "Deadlift", 1, listOf(50f to 5, 55f to 4)),
+                    buildExercise(1, "Bench Press", 2, listOf(25f to 8, 25f to 8))
+                )
+            ),
+            template(
+                name = "Fat Loss Conditioning Circuit",
+                description = "Shorter full-body conditioning flow to support fat-loss routines.",
+                targetMuscleGroups = listOf("Full Body", "Conditioning"),
+                estimatedDuration = 30,
+                tags = listOf(
+                    "goal_fat_loss",
+                    "frequency_5",
+                    "full_body",
+                    "conditioning",
+                    "intensity_medium",
+                    "hiit"
+                ),
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(20f to 15, 20f to 15)),
+                    buildExercise(1, "Bench Press", 1, listOf(15f to 15, 15f to 15)),
+                    buildExercise(3, "Deadlift", 2, listOf(25f to 12, 25f to 12))
+                )
+            ),
+            template(
+                name = "Daily Light Full-Body",
+                description = "Lightweight session for high-frequency weekly consistency.",
+                targetMuscleGroups = listOf("Full Body", "Mobility", "Recovery"),
+                estimatedDuration = 25,
+                tags = listOf(
+                    "goal_general_fitness",
+                    "frequency_7",
+                    "full_body",
+                    "intensity_light",
+                    "recovery"
+                ),
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(15f to 12, 15f to 12)),
+                    buildExercise(1, "Bench Press", 1, listOf(12.5f to 12, 12.5f to 12)),
+                    buildExercise(3, "Deadlift", 2, listOf(20f to 10, 20f to 10))
+                )
+            )
         )
-        return listOf(fullBodyPlan)
     }
 
     override suspend fun getExercisesByIds(ids: List<Int>): List<Exercise> {

@@ -1,5 +1,13 @@
 package com.domcheung.fittrackpro.presentation.profile
 
+import android.Manifest
+import android.app.TimePickerDialog
+import android.content.pm.PackageManager
+import android.os.Build
+import android.text.format.DateFormat
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +32,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.AlertDialog
@@ -31,11 +40,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,14 +60,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.domcheung.fittrackpro.presentation.profile.components.AvatarDialog
 import com.domcheung.fittrackpro.presentation.profile.components.EditNameDialog
 import com.domcheung.fittrackpro.presentation.profile.components.GoalSettingsDialog
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
+import java.util.Locale
 
 @Composable
 fun ProfileScreen(
@@ -67,6 +81,15 @@ fun ProfileScreen(
     val userProfile by viewModel.userProfile.collectAsState()
     val workoutStatistics by viewModel.workoutStatistics.collectAsState()
     val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val reminderEnabled by viewModel.reminderEnabled.collectAsState()
+    val reminderHour by viewModel.reminderHour.collectAsState()
+    val reminderMinute by viewModel.reminderMinute.collectAsState()
+    val reminderSelectedDays by viewModel.reminderSelectedDays.collectAsState()
+    val context = LocalContext.current
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
 
     // Dialog states
     var showEditNameDialog by remember { mutableStateOf(false) }
@@ -164,6 +187,49 @@ fun ProfileScreen(
             SettingsSection(
                 onSyncClick = { viewModel.syncData() },
                 onSignOutClick = { viewModel.showSignOutDialog() },
+                onReminderEnabledChange = { enabled ->
+                    if (
+                        enabled &&
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.POST_NOTIFICATIONS
+                        ) != PackageManager.PERMISSION_GRANTED
+                    ) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                    viewModel.updateReminderEnabled(enabled)
+                },
+                onReminderTimeChange = { hour, minute ->
+                    viewModel.updateReminderTime(hour, minute)
+                },
+                onReminderDayToggle = { day ->
+                    viewModel.toggleReminderDay(day)
+                },
+                onSendTestReminder = {
+                    val hasPermission =
+                        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                                ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.POST_NOTIFICATIONS
+                                ) == PackageManager.PERMISSION_GRANTED
+
+                    if (!hasPermission) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        Toast.makeText(
+                            context,
+                            "Allow notifications, then tap Test Reminder again.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        viewModel.triggerTestReminderNow()
+                        Toast.makeText(context, "Test reminder sent.", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                reminderEnabled = reminderEnabled,
+                reminderHour = reminderHour,
+                reminderMinute = reminderMinute,
+                reminderSelectedDays = reminderSelectedDays,
                 hasUnsyncedData = uiState.hasUnsyncedData,
                 isSyncing = uiState.isSyncing,
                 isSigningOut = uiState.isSigningOut
@@ -718,6 +784,14 @@ private fun StatItem(
 private fun SettingsSection(
     onSyncClick: () -> Unit,
     onSignOutClick: () -> Unit,
+    onReminderEnabledChange: (Boolean) -> Unit,
+    onReminderTimeChange: (Int, Int) -> Unit,
+    onReminderDayToggle: (Int) -> Unit,
+    onSendTestReminder: () -> Unit,
+    reminderEnabled: Boolean,
+    reminderHour: Int,
+    reminderMinute: Int,
+    reminderSelectedDays: Set<Int>,
     hasUnsyncedData: Boolean,
     isSyncing: Boolean,
     isSigningOut: Boolean
@@ -742,6 +816,17 @@ private fun SettingsSection(
     Column(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        ReminderSettingsCard(
+            enabled = reminderEnabled,
+            reminderHour = reminderHour,
+            reminderMinute = reminderMinute,
+            selectedDays = reminderSelectedDays,
+            onEnabledChange = onReminderEnabledChange,
+            onTimeChange = onReminderTimeChange,
+            onDayToggle = onReminderDayToggle,
+            onSendTestReminder = onSendTestReminder
+        )
+
         settingsSections.forEach { (sectionTitle, items) ->
             SettingsSectionCard(
                 title = sectionTitle,
@@ -857,6 +942,155 @@ private fun SettingsSection(
 //            isSigningOut = isSigningOut
 //        )
 //    }
+}
+
+@Composable
+private fun ReminderSettingsCard(
+    enabled: Boolean,
+    reminderHour: Int,
+    reminderMinute: Int,
+    selectedDays: Set<Int>,
+    onEnabledChange: (Boolean) -> Unit,
+    onTimeChange: (Int, Int) -> Unit,
+    onDayToggle: (Int) -> Unit,
+    onSendTestReminder: () -> Unit
+) {
+    val context = LocalContext.current
+    val is24Hour = DateFormat.is24HourFormat(context)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.medium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.55f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Notifications,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary
+                    )
+                    Column {
+                        Text(
+                            text = "Workout reminders",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Get a scheduled reminder to start training",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = onEnabledChange
+                )
+            }
+
+            Text(
+                text = "Reminder time: ${formatReminderTime(reminderHour, reminderMinute, is24Hour)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            TextButton(
+                onClick = {
+                    TimePickerDialog(
+                        context,
+                        { _, hour, minute -> onTimeChange(hour, minute) },
+                        reminderHour,
+                        reminderMinute,
+                        is24Hour
+                    ).show()
+                },
+                enabled = enabled
+            ) {
+                Text("Change reminder time")
+            }
+
+            TextButton(
+                onClick = onSendTestReminder
+            ) {
+                Text("Send test reminder now")
+            }
+
+            Text(
+                text = "Active days",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+
+            val dayItems = listOf(
+                1 to "Mo",
+                2 to "Tu",
+                3 to "We",
+                4 to "Th",
+                5 to "Fr",
+                6 to "Sa",
+                7 to "Su"
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                dayItems.take(4).forEach { (day, label) ->
+                    FilterChip(
+                        selected = day in selectedDays,
+                        onClick = { onDayToggle(day) },
+                        label = { Text(label) },
+                        enabled = enabled
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                dayItems.drop(4).forEach { (day, label) ->
+                    FilterChip(
+                        selected = day in selectedDays,
+                        onClick = { onDayToggle(day) },
+                        label = { Text(label) },
+                        enabled = enabled
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatReminderTime(hour: Int, minute: Int, is24Hour: Boolean): String {
+    val safeHour = hour.coerceIn(0, 23)
+    val safeMinute = minute.coerceIn(0, 59)
+    if (is24Hour) {
+        return String.format(Locale.getDefault(), "%02d:%02d", safeHour, safeMinute)
+    }
+
+    val period = if (safeHour >= 12) "PM" else "AM"
+    val displayHour = when (safeHour % 12) {
+        0 -> 12
+        else -> safeHour % 12
+    }
+    return String.format(Locale.getDefault(), "%02d:%02d %s", displayHour, safeMinute, period)
 }
 
 @Composable

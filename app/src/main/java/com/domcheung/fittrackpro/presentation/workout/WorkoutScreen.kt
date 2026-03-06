@@ -3,6 +3,7 @@ package com.domcheung.fittrackpro.presentation.workout
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -29,7 +30,7 @@ fun WorkoutScreen(
     val uiState by viewModel.uiState.collectAsState()
     val userWorkoutPlans by viewModel.userWorkoutPlans.collectAsState()
     val activeWorkoutSession by viewModel.activeWorkoutSession.collectAsState()
-    val filteredPlans by viewModel.getFilteredWorkoutPlans().collectAsState()
+    val filteredPlans by viewModel.filteredWorkoutPlans.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -67,6 +68,14 @@ fun WorkoutScreen(
             WorkoutHeader(
                 searchQuery = uiState.searchQuery,
                 onSearchQueryChange = { viewModel.searchWorkoutPlans(it) },
+                selectedTemplateTags = uiState.selectedTemplateTags,
+                templateOnlyMode = uiState.templateOnlyMode,
+                templateFilterOptions = uiState.templateFilterOptions,
+                onTemplateTagToggled = viewModel::toggleTemplateTag,
+                onTemplateOnlyModeChanged = viewModel::setTemplateOnlyMode,
+                onClearTemplateFilters = viewModel::clearTemplateFilters,
+                filteredCount = filteredPlans.size,
+                totalCount = userWorkoutPlans.size,
                 isLoading = uiState.isLoading
             )
 
@@ -88,10 +97,16 @@ fun WorkoutScreen(
                 uiState.isLoading -> {
                     LoadingContent()
                 }
-                filteredPlans.isEmpty() && uiState.searchQuery.isNotEmpty() -> {
+                filteredPlans.isEmpty() && (
+                    uiState.searchQuery.isNotEmpty() ||
+                        uiState.selectedTemplateTags.isNotEmpty() ||
+                        uiState.templateOnlyMode
+                    ) -> {
                     EmptySearchContent(
                         searchQuery = uiState.searchQuery,
-                        onClearSearch = { viewModel.searchWorkoutPlans("") }
+                        hasActiveTemplateFilters = uiState.selectedTemplateTags.isNotEmpty() || uiState.templateOnlyMode,
+                        onClearSearch = { viewModel.searchWorkoutPlans("") },
+                        onClearTemplateFilters = viewModel::clearTemplateFilters
                     )
                 }
                 userWorkoutPlans.isEmpty() -> {
@@ -127,6 +142,14 @@ fun WorkoutScreen(
 private fun WorkoutHeader(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
+    selectedTemplateTags: Set<String>,
+    templateOnlyMode: Boolean,
+    templateFilterOptions: List<TemplateFilterOption>,
+    onTemplateTagToggled: (String) -> Unit,
+    onTemplateOnlyModeChanged: (Boolean) -> Unit,
+    onClearTemplateFilters: () -> Unit,
+    filteredCount: Int,
+    totalCount: Int,
     isLoading: Boolean
 ) {
     Column {
@@ -169,6 +192,62 @@ private fun WorkoutHeader(
             enabled = !isLoading,
             singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "Template quick filters",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "Use goal, frequency, and intensity tags to find starter plans faster.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = templateOnlyMode,
+                    onClick = { onTemplateOnlyModeChanged(!templateOnlyMode) },
+                    label = { Text("Templates Only") }
+                )
+            }
+
+            items(templateFilterOptions, key = { option -> option.tag }) { option ->
+                FilterChip(
+                    selected = option.tag in selectedTemplateTags,
+                    onClick = { onTemplateTagToggled(option.tag) },
+                    label = { Text(option.label) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Showing $filteredCount of $totalCount plans",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (selectedTemplateTags.isNotEmpty() || templateOnlyMode) {
+                TextButton(onClick = onClearTemplateFilters) {
+                    Text("Clear Filters")
+                }
+            }
+        }
     }
 }
 
@@ -260,8 +339,22 @@ private fun LoadingContent() {
 @Composable
 private fun EmptySearchContent(
     searchQuery: String,
-    onClearSearch: () -> Unit
+    hasActiveTemplateFilters: Boolean,
+    onClearSearch: () -> Unit,
+    onClearTemplateFilters: () -> Unit
 ) {
+    val title = when {
+        searchQuery.isNotBlank() && hasActiveTemplateFilters -> "No plans match your search and filters"
+        searchQuery.isNotBlank() -> "No plans found for \"$searchQuery\""
+        else -> "No plans match the selected filters"
+    }
+
+    val subtitle = when {
+        searchQuery.isNotBlank() && hasActiveTemplateFilters -> "Try a broader term or clear some filters"
+        searchQuery.isNotBlank() -> "Try a different search term or create a new plan"
+        else -> "Try adjusting template filters or include non-template plans"
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -276,7 +369,7 @@ private fun EmptySearchContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "No plans found for \"$searchQuery\"",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             textAlign = TextAlign.Center
         )
@@ -284,7 +377,7 @@ private fun EmptySearchContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Try a different search term or create a new plan",
+            text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -292,8 +385,16 @@ private fun EmptySearchContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        TextButton(onClick = onClearSearch) {
-            Text("Clear Search")
+        if (searchQuery.isNotBlank()) {
+            TextButton(onClick = onClearSearch) {
+                Text("Clear Search")
+            }
+        }
+
+        if (hasActiveTemplateFilters) {
+            TextButton(onClick = onClearTemplateFilters) {
+                Text("Clear Filters")
+            }
         }
     }
 }

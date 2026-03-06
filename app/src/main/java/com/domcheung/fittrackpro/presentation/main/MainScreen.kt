@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -26,9 +27,14 @@ import com.domcheung.fittrackpro.presentation.workout.WorkoutScreen
 @Composable
 fun MainTabScreen(
     navController: NavHostController, // Receive the NavController
+    initialTab: MainTab = MainTab.HOME,
     onSignOut: () -> Unit = {}
 ) {
-    var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
+    var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
+
+    LaunchedEffect(initialTab) {
+        selectedTab = initialTab
+    }
 
     Scaffold(
         bottomBar = {

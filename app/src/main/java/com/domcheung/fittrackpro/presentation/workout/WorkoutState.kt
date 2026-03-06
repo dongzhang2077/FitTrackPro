@@ -13,6 +13,9 @@ data class WorkoutUiState(
     val isCopyingPlan: Boolean = false,
     val errorMessage: String? = null,
     val searchQuery: String = "",
+    val selectedTemplateTags: Set<String> = emptySet(),
+    val templateOnlyMode: Boolean = false,
+    val templateFilterOptions: List<TemplateFilterOption> = WorkoutTemplateFilters.options,
 
     // One-time events to be consumed by the UI
     val workoutStarted: Boolean = false,

@@ -1,20 +1,24 @@
 package com.domcheung.fittrackpro.navigation
 
+import android.net.Uri
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.domcheung.fittrackpro.MainActivity
 import com.domcheung.fittrackpro.presentation.exercise_detail.ExerciseDetailScreen
 import com.domcheung.fittrackpro.presentation.login.LoginScreen
 import com.domcheung.fittrackpro.presentation.main.MainTabScreen
+import com.domcheung.fittrackpro.presentation.model.MainTab
 import com.domcheung.fittrackpro.presentation.onboarding.OnboardingScreen
 import com.domcheung.fittrackpro.presentation.plan_builder.PlanBuilderScreen
 import com.domcheung.fittrackpro.presentation.register.RegisterScreen
@@ -28,6 +32,12 @@ object Routes {
     const val REGISTER = "register"
     const val ONBOARDING = "onboarding"
     const val MAIN = "main"
+    const val MAIN_ARG_TAB = "tab"
+    private const val MAIN_ROUTE_WITH_TAB = "$MAIN?$MAIN_ARG_TAB={$MAIN_ARG_TAB}"
+    const val MAIN_TAB_HOME = "home"
+    const val MAIN_TAB_WORKOUT = "workout"
+    const val MAIN_TAB_PROGRESS = "progress"
+    const val MAIN_TAB_PROFILE = "profile"
 
     // New route for the workout session screen
     // It includes a placeholder for the sessionId argument
@@ -54,13 +64,51 @@ object Routes {
      * e.g., Routes.exerciseDetail(123) -> "exercise_detail/123"
      */
     fun exerciseDetail(exerciseId: Int) = "$EXERCISE_DETAIL_ROUTE/$exerciseId"
+
+    fun main(tab: String? = null): String {
+        if (tab.isNullOrBlank()) {
+            return MAIN
+        }
+        return "$MAIN?$MAIN_ARG_TAB=${Uri.encode(tab)}"
+    }
+
+    fun mainRoutePattern(): String = MAIN_ROUTE_WITH_TAB
+
+    fun mainRouteArguments() = listOf(
+        navArgument(MAIN_ARG_TAB) {
+            type = NavType.StringType
+            nullable = true
+            defaultValue = MAIN_TAB_HOME
+        }
+    )
+
+    fun mainTabFromBackStack(backStackEntryTab: String?): MainTab {
+        return when (backStackEntryTab?.lowercase()) {
+            MAIN_TAB_WORKOUT, MainActivity.MAIN_TAB_WORKOUT -> MainTab.WORKOUT
+            MAIN_TAB_PROGRESS -> MainTab.PROGRESS
+            MAIN_TAB_PROFILE -> MainTab.PROFILE
+            else -> MainTab.HOME
+        }
+    }
 }
 
 @Composable
 fun AppNavigation(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Routes.SPLASH
+    startDestination: String = Routes.SPLASH,
+    initialMainTabRequest: String? = null,
+    runtimeMainTabRequest: String? = null,
+    onRuntimeMainTabRequestConsumed: () -> Unit = {}
 ) {
+    LaunchedEffect(runtimeMainTabRequest) {
+        if (!runtimeMainTabRequest.isNullOrBlank()) {
+            navController.navigate(Routes.main(runtimeMainTabRequest)) {
+                launchSingleTop = true
+            }
+            onRuntimeMainTabRequestConsumed()
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -98,7 +146,7 @@ fun AppNavigation(
                     }
                 },
                 onNavigateToMain = {
-                    navController.navigate(Routes.MAIN) {
+                    navController.navigate(Routes.main(initialMainTabRequest)) {
                         popUpTo(Routes.SPLASH) { inclusive = true }
                     }
                 },
@@ -114,7 +162,7 @@ fun AppNavigation(
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(Routes.MAIN) {
+                    navController.navigate(Routes.main(initialMainTabRequest)) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 },
@@ -142,12 +190,12 @@ fun AppNavigation(
         composable(Routes.ONBOARDING) {
             OnboardingScreen(
                 onComplete = {
-                    navController.navigate(Routes.MAIN) {
+                    navController.navigate(Routes.main(initialMainTabRequest)) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
                 },
                 onSkip = {
-                    navController.navigate(Routes.MAIN) {
+                    navController.navigate(Routes.main(initialMainTabRequest)) {
                         popUpTo(Routes.ONBOARDING) { inclusive = true }
                     }
                 }
@@ -155,10 +203,18 @@ fun AppNavigation(
         }
 
         // Main App with Tab Navigation
-        composable(Routes.MAIN) {
+        composable(
+            route = Routes.mainRoutePattern(),
+            arguments = Routes.mainRouteArguments()
+        ) { backStackEntry ->
+            val initialTab = Routes.mainTabFromBackStack(
+                backStackEntry.arguments?.getString(Routes.MAIN_ARG_TAB)
+            )
+
             // Pass the NavController down to MainTabScreen so it can navigate deeper
             MainTabScreen(
                 navController = navController,
+                initialTab = initialTab,
                 onSignOut = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.MAIN) { inclusive = true }

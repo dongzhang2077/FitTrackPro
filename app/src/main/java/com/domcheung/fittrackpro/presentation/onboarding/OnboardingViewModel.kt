@@ -147,6 +147,12 @@ class OnboardingViewModel @Inject constructor(
                     initialWeight = data.currentWeight // Set initial weight to current weight
                 )
 
+                userPreferencesManager.saveFitnessPreferences(
+                    primaryGoal = data.primaryGoal.name,
+                    workoutFrequencyPerWeek = data.workoutFrequency.timesPerWeek,
+                    experienceLevel = data.experienceLevel.name
+                )
+
                 // Mark onboarding as completed
                 _onboardingData.value = data.copy(isCompleted = true)
 

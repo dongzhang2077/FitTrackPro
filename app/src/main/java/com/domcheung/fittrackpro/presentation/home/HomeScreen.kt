@@ -37,7 +37,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,7 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.domcheung.fittrackpro.data.model.WorkoutPlan
+import com.domcheung.fittrackpro.domain.model.DailyWorkoutRecommendation
+import com.domcheung.fittrackpro.domain.model.RecommendationSource
 import com.domcheung.fittrackpro.ui.theme.HandDrawnShapes
 
 @Composable
@@ -64,6 +64,7 @@ fun HomeScreen(
     val storedWeeklyGoal by viewModel.weeklyWorkoutGoal.collectAsState()
     val weeklyWorkoutCount by viewModel.weeklyWorkoutCount.collectAsState()
     val weeklyProgress by viewModel.weeklyProgress.collectAsState()
+    val todaysRecommendation by viewModel.todaysRecommendation.collectAsState()
     
     // State for weekly goal dialog
     var showWeeklyGoalDialog by remember { mutableStateOf(false) }
@@ -125,11 +126,8 @@ fun HomeScreen(
                 isLoading = uiState.isAnyOperationInProgress
             )
         } else {
-            val recommendedPlan by produceState<WorkoutPlan?>(initialValue = null) {
-                value = viewModel.getTodaysRecommendedPlan()
-            }
             TodayGoalCard(
-                recommendedPlan = recommendedPlan,
+                recommendation = todaysRecommendation,
                 onStartClick = { viewModel.quickStartWorkout() },
                 isLoading = uiState.isAnyOperationInProgress
             )
@@ -347,10 +345,12 @@ private fun ActiveWorkoutCard(
 
 @Composable
 private fun TodayGoalCard(
-    recommendedPlan: WorkoutPlan?,
+    recommendation: DailyWorkoutRecommendation,
     onStartClick: () -> Unit,
     isLoading: Boolean
 ) {
+    val recommendedPlan = recommendation.plan
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -385,6 +385,18 @@ private fun TodayGoalCard(
                     text = recommendedPlan.name,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Medium
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                RecommendationSourceChip(source = recommendation.source)
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = recommendation.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 if (recommendedPlan.description.isNotEmpty()) {
@@ -441,6 +453,24 @@ private fun TodayGoalCard(
             }
         }
     }
+}
+
+@Composable
+private fun RecommendationSourceChip(source: RecommendationSource) {
+    val label = when (source) {
+        RecommendationSource.AI -> "AI Recommendation"
+        RecommendationSource.SMART_FALLBACK -> "Smart Fallback"
+        RecommendationSource.NONE -> "No Recommendation"
+    }
+
+    FilterChip(
+        selected = true,
+        onClick = {},
+        enabled = false,
+        label = {
+            Text(label)
+        }
+    )
 }
 
 @Composable
