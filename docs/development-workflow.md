@@ -51,6 +51,14 @@ cmd.exe /C "gradlew.bat ciCheck --no-daemon --stacktrace"
 - `:app:assembleDebug`
 - `:app:testDebugUnitTest`
 
+## Post-Check Confirmation
+
+After `ciCheck` is green, update the proposal alignment checklist before moving to the next module:
+
+- Checklist: `docs/proposal-core-checklist.md`
+- Rule: only treat a feature as complete when test/build checks are green and checklist evidence paths are recorded.
+- If an item is partial (`[~]`), finish that gap before starting unrelated module work.
+
 ## CI Behavior
 
 GitHub Actions workflow: `.github/workflows/android-ci.yml`

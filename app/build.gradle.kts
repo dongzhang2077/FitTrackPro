@@ -11,6 +11,10 @@ plugins {
 
 }
 
+fun String.asBuildConfigString(): String {
+    return "\"" + this.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+}
+
 android {
     namespace = "com.domcheung.fittrackpro"
     compileSdk = 35
@@ -21,6 +25,20 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+
+        val aiRecommenderEndpoint =
+            (project.findProperty("AI_RECOMMENDER_ENDPOINT") as? String)
+                ?: "https://api.openai.com/v1/chat/completions"
+        val aiRecommenderModel =
+            (project.findProperty("AI_RECOMMENDER_MODEL") as? String)
+                ?: "gpt-4o-mini"
+        val aiRecommenderApiKey =
+            (project.findProperty("AI_RECOMMENDER_API_KEY") as? String)
+                ?: (System.getenv("AI_RECOMMENDER_API_KEY") ?: "")
+
+        buildConfigField("String", "AI_RECOMMENDER_ENDPOINT", aiRecommenderEndpoint.asBuildConfigString())
+        buildConfigField("String", "AI_RECOMMENDER_MODEL", aiRecommenderModel.asBuildConfigString())
+        buildConfigField("String", "AI_RECOMMENDER_API_KEY", aiRecommenderApiKey.asBuildConfigString())
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -117,6 +136,9 @@ dependencies {
 
     // datastore prefernence
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")

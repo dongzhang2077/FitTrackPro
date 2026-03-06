@@ -246,9 +246,15 @@ object UseCaseModule {
     @Provides
     @Singleton
     fun provideGetTodaysRecommendedPlanUseCase(
-        workoutRepository: com.domcheung.fittrackpro.data.repository.WorkoutRepository
+        workoutRepository: com.domcheung.fittrackpro.data.repository.WorkoutRepository,
+        aiWorkoutRecommendationService: com.domcheung.fittrackpro.data.recommendation.AiWorkoutRecommendationService,
+        userPreferencesManager: com.domcheung.fittrackpro.data.local.UserPreferencesManager
     ): GetTodaysRecommendedPlanUseCase {
-        return GetTodaysRecommendedPlanUseCase(workoutRepository)
+        return GetTodaysRecommendedPlanUseCase(
+            workoutRepository = workoutRepository,
+            aiWorkoutRecommendationService = aiWorkoutRecommendationService,
+            userPreferencesManager = userPreferencesManager
+        )
     }
 
     @Provides

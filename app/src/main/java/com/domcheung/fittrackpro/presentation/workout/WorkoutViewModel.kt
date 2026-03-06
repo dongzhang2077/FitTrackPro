@@ -58,6 +58,23 @@ class WorkoutViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    val filteredWorkoutPlans: StateFlow<List<WorkoutPlan>> = combine(
+        userWorkoutPlans,
+        _uiState.map { state -> state.searchQuery }.distinctUntilChanged(),
+        _uiState.map { state -> state.selectedTemplateTags }.distinctUntilChanged(),
+        _uiState.map { state -> state.templateOnlyMode }.distinctUntilChanged()
+    ) { plans, query, selectedTemplateTags, templateOnlyMode ->
+        val trimmedQuery = query.trim()
+        plans.filter { plan ->
+            matchesTemplateFilters(plan, selectedTemplateTags, templateOnlyMode) &&
+                matchesQuery(plan, trimmedQuery)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     // A flow that observes the currently active workout session.
     val activeWorkoutSession = authRepository.isLoggedIn()
         .flatMapLatest { isLoggedIn ->
@@ -165,28 +182,54 @@ class WorkoutViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
+    fun toggleTemplateTag(tag: String) {
+        _uiState.update { state ->
+            val updatedTags = state.selectedTemplateTags.toMutableSet().apply {
+                if (contains(tag)) remove(tag) else add(tag)
+            }
+            state.copy(selectedTemplateTags = updatedTags)
+        }
+    }
+
+    fun setTemplateOnlyMode(enabled: Boolean) {
+        _uiState.update { state ->
+            state.copy(templateOnlyMode = enabled)
+        }
+    }
+
+    fun clearTemplateFilters() {
+        _uiState.update { state ->
+            state.copy(
+                selectedTemplateTags = emptySet(),
+                templateOnlyMode = false
+            )
+        }
+    }
+
     /**
      * Returns a flow of workout plans filtered by the current search query.
      */
-    fun getFilteredWorkoutPlans(): StateFlow<List<WorkoutPlan>> {
-        return combine(
-            userWorkoutPlans,
-            _uiState.map { it.searchQuery }.distinctUntilChanged()
-        ) { plans, query ->
-            if (query.isBlank()) {
-                plans
-            } else {
-                plans.filter { plan ->
-                    plan.name.contains(query, ignoreCase = true) ||
-                            plan.description.contains(query, ignoreCase = true) ||
-                            plan.targetMuscleGroups.any { it.contains(query, ignoreCase = true) }
-                }
-            }
-        }.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = userWorkoutPlans.value
-        )
+    private fun matchesQuery(plan: WorkoutPlan, query: String): Boolean {
+        if (query.isBlank()) {
+            return true
+        }
+
+        return plan.name.contains(query, ignoreCase = true) ||
+            plan.description.contains(query, ignoreCase = true) ||
+            plan.targetMuscleGroups.any { group -> group.contains(query, ignoreCase = true) } ||
+            plan.tags.any { tag -> tag.contains(query, ignoreCase = true) }
+    }
+
+    private fun matchesTemplateFilters(
+        plan: WorkoutPlan,
+        selectedTemplateTags: Set<String>,
+        templateOnlyMode: Boolean
+    ): Boolean {
+        if (templateOnlyMode && !plan.isTemplate) {
+            return false
+        }
+
+        return plan.matchesSelectedTemplateTags(selectedTemplateTags)
     }
 
     /**
