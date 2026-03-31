@@ -4,17 +4,26 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
+import com.domcheung.fittrackpro.data.local.AppThemeMode
+import com.domcheung.fittrackpro.data.local.UserPreferencesManager
 import com.domcheung.fittrackpro.navigation.AppNavigation
 import com.domcheung.fittrackpro.ui.theme.FitTrackProTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var userPreferencesManager: UserPreferencesManager
 
     private val runtimeMainTabRequest = mutableStateOf<String?>(null)
 
@@ -23,7 +32,18 @@ class MainActivity : ComponentActivity() {
         val initialMainTabRequest = extractMainTabRequest(intent)
 
         setContent {
-            FitTrackProTheme {
+            val themeMode by userPreferencesManager.themeMode.collectAsState(initial = AppThemeMode.SYSTEM)
+            val dynamicColorEnabled by userPreferencesManager.dynamicColorEnabled.collectAsState(initial = false)
+            val darkTheme = when (themeMode) {
+                AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+                AppThemeMode.LIGHT -> false
+                AppThemeMode.DARK -> true
+            }
+
+            FitTrackProTheme(
+                darkTheme = darkTheme,
+                dynamicColor = dynamicColorEnabled
+            ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

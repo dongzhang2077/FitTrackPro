@@ -17,6 +17,7 @@ import com.domcheung.fittrackpro.data.model.WorkoutStatus
 import com.domcheung.fittrackpro.data.remote.WgerApiService
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -793,11 +794,22 @@ class WorkoutRepositoryImpl @Inject constructor(
      */
     override suspend fun seedInitialPlansIfEmpty(userId: String) {
         try {
-            val planCount = workoutPlanDao.getUserWorkoutPlanCount(userId)
-            if (planCount == 0) {
-                // User has no plans, create sample ones for them
-                val samplePlans = createSampleWorkoutPlans(userId)
-                workoutPlanDao.insertWorkoutPlans(samplePlans)
+            val currentPlans = workoutPlanDao.getUserWorkoutPlans(userId).first()
+            val existingTemplateNames = currentPlans
+                .asSequence()
+                .filter { plan -> plan.isTemplate }
+                .map { plan -> plan.name }
+                .toSet()
+
+            val starterPlans = createSampleWorkoutPlans(userId)
+            val plansToInsert = if (currentPlans.isEmpty()) {
+                starterPlans
+            } else {
+                starterPlans.filter { plan -> plan.name !in existingTemplateNames }
+            }
+
+            if (plansToInsert.isNotEmpty()) {
+                workoutPlanDao.insertWorkoutPlans(plansToInsert)
             }
         } catch (e: Exception) {
             // Log error or handle it silently
@@ -959,6 +971,43 @@ class WorkoutRepositoryImpl @Inject constructor(
                     buildExercise(2, "Squat", 0, listOf(15f to 12, 15f to 12)),
                     buildExercise(1, "Bench Press", 1, listOf(12.5f to 12, 12.5f to 12)),
                     buildExercise(3, "Deadlift", 2, listOf(20f to 10, 20f to 10))
+                )
+            ),
+            template(
+                name = "Weekend Strength Builder",
+                description = "Longer full-body strength block for low-frequency training schedules.",
+                targetMuscleGroups = listOf("Full Body", "Strength", "Compound"),
+                estimatedDuration = 65,
+                tags = listOf(
+                    "goal_strength",
+                    "frequency_2",
+                    "full_body",
+                    "intensity_heavy",
+                    "compound"
+                ),
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(50f to 5, 55f to 5, 55f to 5)),
+                    buildExercise(1, "Bench Press", 1, listOf(40f to 6, 42.5f to 6, 45f to 5)),
+                    buildExercise(3, "Deadlift", 2, listOf(55f to 5, 60f to 4, 60f to 4))
+                )
+            ),
+            template(
+                name = "Home Dumbbell Full-Body",
+                description = "Beginner-friendly at-home plan with lighter full-body coverage.",
+                targetMuscleGroups = listOf("Full Body", "Beginner", "Home Workout"),
+                estimatedDuration = 35,
+                tags = listOf(
+                    "goal_general_fitness",
+                    "frequency_4",
+                    "full_body",
+                    "intensity_light",
+                    "equipment_dumbbell_only",
+                    "beginner"
+                ),
+                exercises = listOf(
+                    buildExercise(2, "Squat", 0, listOf(20f to 12, 20f to 12, 20f to 12)),
+                    buildExercise(1, "Bench Press", 1, listOf(15f to 12, 15f to 12, 15f to 12)),
+                    buildExercise(3, "Deadlift", 2, listOf(25f to 10, 25f to 10, 25f to 10))
                 )
             )
         )

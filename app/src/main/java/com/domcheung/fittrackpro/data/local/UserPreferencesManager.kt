@@ -39,12 +39,15 @@ class UserPreferencesManager @Inject constructor(
         val REMINDER_HOUR = intPreferencesKey("reminder_hour")
         val REMINDER_MINUTE = intPreferencesKey("reminder_minute")
         val REMINDER_DAYS = stringSetPreferencesKey("reminder_days")
+        val THEME_MODE = stringPreferencesKey("theme_mode")
+        val THEME_DYNAMIC_COLOR = booleanPreferencesKey("theme_dynamic_color")
     }
 
     private companion object {
         const val DEFAULT_FITNESS_GOAL = "GENERAL_FITNESS"
         const val DEFAULT_EXPERIENCE_LEVEL = "BEGINNER"
         const val DEFAULT_WORKOUT_FREQUENCY = 3
+        const val DEFAULT_THEME_MODE = "SYSTEM"
     }
 
     // Save login state
@@ -249,6 +252,43 @@ class UserPreferencesManager @Inject constructor(
             minute = minute,
             selectedDays = days
         )
+    }
+
+    val themeMode: Flow<AppThemeMode> = dataStore.data.map { preferences ->
+        AppThemeMode.fromRaw(preferences[PreferenceKeys.THEME_MODE] ?: DEFAULT_THEME_MODE)
+    }
+
+    val dynamicColorEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[PreferenceKeys.THEME_DYNAMIC_COLOR] ?: false
+    }
+
+    val themeSettings: Flow<AppThemeSettings> = combine(
+        themeMode,
+        dynamicColorEnabled
+    ) { mode, dynamicColor ->
+        AppThemeSettings(
+            mode = mode,
+            dynamicColorEnabled = dynamicColor
+        )
+    }
+
+    suspend fun updateThemeMode(mode: AppThemeMode) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.THEME_MODE] = mode.name
+        }
+    }
+
+    suspend fun updateDynamicColorEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.THEME_DYNAMIC_COLOR] = enabled
+        }
+    }
+
+    suspend fun updateThemeSettings(settings: AppThemeSettings) {
+        dataStore.edit { preferences ->
+            preferences[PreferenceKeys.THEME_MODE] = settings.mode.name
+            preferences[PreferenceKeys.THEME_DYNAMIC_COLOR] = settings.dynamicColorEnabled
+        }
     }
 
     suspend fun updateReminderEnabled(enabled: Boolean) {
