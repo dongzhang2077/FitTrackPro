@@ -3,6 +3,8 @@ package com.domcheung.fittrackpro
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import com.domcheung.fittrackpro.data.local.AppThemeMode
+import com.domcheung.fittrackpro.data.local.AppThemeSettings
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,5 +70,39 @@ class FitnessPreferencesTest {
         assertEquals("GENERAL_FITNESS", userPreferencesManager.fitnessPrimaryGoal.first())
         assertEquals(7, userPreferencesManager.fitnessWorkoutFrequency.first())
         assertEquals("BEGINNER", userPreferencesManager.fitnessExperienceLevel.first())
+    }
+
+    @Test
+    fun defaultThemeSettingsAreSystemWithDynamicColorDisabled() = runBlocking {
+        assertEquals(AppThemeMode.SYSTEM, userPreferencesManager.themeMode.first())
+        assertEquals(false, userPreferencesManager.dynamicColorEnabled.first())
+    }
+
+    @Test
+    fun updateThemeModePersistsSelectedMode() = runBlocking {
+        userPreferencesManager.updateThemeMode(AppThemeMode.DARK)
+
+        assertEquals(AppThemeMode.DARK, userPreferencesManager.themeMode.first())
+    }
+
+    @Test
+    fun updateDynamicColorEnabledPersistsFlag() = runBlocking {
+        userPreferencesManager.updateDynamicColorEnabled(true)
+
+        assertEquals(true, userPreferencesManager.dynamicColorEnabled.first())
+    }
+
+    @Test
+    fun updateThemeSettingsPersistsModeAndDynamicColorTogether() = runBlocking {
+        userPreferencesManager.updateThemeSettings(
+            AppThemeSettings(
+                mode = AppThemeMode.LIGHT,
+                dynamicColorEnabled = true
+            )
+        )
+
+        val settings = userPreferencesManager.themeSettings.first()
+        assertEquals(AppThemeMode.LIGHT, settings.mode)
+        assertEquals(true, settings.dynamicColorEnabled)
     }
 }

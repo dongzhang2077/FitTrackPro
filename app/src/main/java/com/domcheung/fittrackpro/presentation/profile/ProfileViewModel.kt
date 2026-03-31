@@ -2,6 +2,7 @@ package com.domcheung.fittrackpro.presentation.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.domcheung.fittrackpro.data.local.AppThemeMode
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
 import com.domcheung.fittrackpro.data.reminder.ReminderSettings
 import com.domcheung.fittrackpro.data.reminder.WorkoutReminderScheduler
@@ -133,6 +134,20 @@ class ProfileViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ReminderSettings()
+        )
+
+    val themeMode: StateFlow<AppThemeMode> = userPreferencesManager.themeMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = AppThemeMode.SYSTEM
+        )
+
+    val dynamicColorEnabled: StateFlow<Boolean> = userPreferencesManager.dynamicColorEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
         )
 
     // Workout statistics for profile summary
@@ -500,6 +515,18 @@ class ProfileViewModel @Inject constructor(
                     errorMessage = e.message ?: "Failed to send test reminder"
                 )
             }
+        }
+    }
+
+    fun updateThemeMode(mode: AppThemeMode) {
+        viewModelScope.launch {
+            userPreferencesManager.updateThemeMode(mode)
+        }
+    }
+
+    fun updateDynamicColorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesManager.updateDynamicColorEnabled(enabled)
         }
     }
 
