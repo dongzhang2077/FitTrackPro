@@ -28,16 +28,35 @@ private val FitTrackLightColorScheme = lightColorScheme(
     error = Color(0xFFF44336)
 )
 
-// Dark theme color scheme - for future implementation
 private val FitTrackDarkColorScheme = darkColorScheme(
-    primary = Color(0xFFD7819A),
-    secondary = Color(0xFFC8AD7F),
-    tertiary = Color(0xFFA8DADC),
-    surface = Color(0xFF2D2D2D),
-    background = Color(0xFF121212),
-    onSurface = Color(0xFFF8F9FA),
-    onSurfaceVariant = Color(0xFFCCCCCC),
-    error = Color(0xFFEF5350)
+    primary = Color(0xFFFFB2C7),
+    onPrimary = Color(0xFF5A1D33),
+    primaryContainer = Color(0xFF7A334B),
+    onPrimaryContainer = Color(0xFFFFD9E4),
+
+    secondary = Color(0xFFE7CC9A),
+    onSecondary = Color(0xFF3E2E10),
+    secondaryContainer = Color(0xFF5A4620),
+    onSecondaryContainer = Color(0xFFFFE8BE),
+
+    tertiary = Color(0xFFBCECF0),
+    onTertiary = Color(0xFF00363B),
+    tertiaryContainer = Color(0xFF1C4E54),
+    onTertiaryContainer = Color(0xFFD3F8FC),
+
+    background = Color(0xFF111318),
+    onBackground = Color(0xFFE4E2E6),
+    surface = Color(0xFF16181D),
+    onSurface = Color(0xFFECE9EE),
+    surfaceVariant = Color(0xFF46464F),
+    onSurfaceVariant = Color(0xFFE3E1EA),
+    outline = Color(0xFF9998A1),
+    outlineVariant = Color(0xFF63636C),
+
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6)
 )
 
 @Composable
@@ -62,7 +81,7 @@ fun FitTrackProTheme(
         SideEffect {
             val window = (view.context as Activity).window
             window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
         }
     }
 

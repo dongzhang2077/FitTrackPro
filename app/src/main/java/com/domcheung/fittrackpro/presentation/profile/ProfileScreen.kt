@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.TrackChanges
 import androidx.compose.material3.AlertDialog
@@ -66,6 +67,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.domcheung.fittrackpro.data.local.AppThemeMode
 import com.domcheung.fittrackpro.presentation.profile.components.AvatarDialog
 import com.domcheung.fittrackpro.presentation.profile.components.EditNameDialog
 import com.domcheung.fittrackpro.presentation.profile.components.GoalSettingsDialog
@@ -85,6 +87,8 @@ fun ProfileScreen(
     val reminderHour by viewModel.reminderHour.collectAsState()
     val reminderMinute by viewModel.reminderMinute.collectAsState()
     val reminderSelectedDays by viewModel.reminderSelectedDays.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
+    val dynamicColorEnabled by viewModel.dynamicColorEnabled.collectAsState()
     val context = LocalContext.current
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -226,10 +230,14 @@ fun ProfileScreen(
                         Toast.makeText(context, "Test reminder sent.", Toast.LENGTH_SHORT).show()
                     }
                 },
+                onThemeModeChange = { mode -> viewModel.updateThemeMode(mode) },
+                onDynamicColorEnabledChange = { enabled -> viewModel.updateDynamicColorEnabled(enabled) },
                 reminderEnabled = reminderEnabled,
                 reminderHour = reminderHour,
                 reminderMinute = reminderMinute,
                 reminderSelectedDays = reminderSelectedDays,
+                themeMode = themeMode,
+                dynamicColorEnabled = dynamicColorEnabled,
                 hasUnsyncedData = uiState.hasUnsyncedData,
                 isSyncing = uiState.isSyncing,
                 isSigningOut = uiState.isSigningOut
@@ -788,10 +796,14 @@ private fun SettingsSection(
     onReminderTimeChange: (Int, Int) -> Unit,
     onReminderDayToggle: (Int) -> Unit,
     onSendTestReminder: () -> Unit,
+    onThemeModeChange: (AppThemeMode) -> Unit,
+    onDynamicColorEnabledChange: (Boolean) -> Unit,
     reminderEnabled: Boolean,
     reminderHour: Int,
     reminderMinute: Int,
     reminderSelectedDays: Set<Int>,
+    themeMode: AppThemeMode,
+    dynamicColorEnabled: Boolean,
     hasUnsyncedData: Boolean,
     isSyncing: Boolean,
     isSigningOut: Boolean
@@ -825,6 +837,13 @@ private fun SettingsSection(
             onTimeChange = onReminderTimeChange,
             onDayToggle = onReminderDayToggle,
             onSendTestReminder = onSendTestReminder
+        )
+
+        ThemeSettingsCard(
+            themeMode = themeMode,
+            dynamicColorEnabled = dynamicColorEnabled,
+            onThemeModeChange = onThemeModeChange,
+            onDynamicColorEnabledChange = onDynamicColorEnabledChange
         )
 
         settingsSections.forEach { (sectionTitle, items) ->
@@ -1077,6 +1096,106 @@ private fun ReminderSettingsCard(
         }
     }
 }
+
+@Composable
+private fun ThemeSettingsCard(
+    themeMode: AppThemeMode,
+    dynamicColorEnabled: Boolean,
+    onThemeModeChange: (AppThemeMode) -> Unit,
+    onDynamicColorEnabledChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(HandDrawnShapes.medium),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Theme settings",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Choose app appearance mode and optional dynamic colors",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = "Theme mode",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                themeModeOptions.forEach { option ->
+                    FilterChip(
+                        selected = themeMode == option.mode,
+                        onClick = { onThemeModeChange(option.mode) },
+                        label = { Text(option.label) }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Dynamic color",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Use Android 12+ wallpaper-based colors when available",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Switch(
+                    checked = dynamicColorEnabled,
+                    onCheckedChange = onDynamicColorEnabledChange
+                )
+            }
+        }
+    }
+}
+
+private data class ThemeModeOption(
+    val mode: AppThemeMode,
+    val label: String
+)
+
+private val themeModeOptions = listOf(
+    ThemeModeOption(mode = AppThemeMode.SYSTEM, label = "System"),
+    ThemeModeOption(mode = AppThemeMode.LIGHT, label = "Light"),
+    ThemeModeOption(mode = AppThemeMode.DARK, label = "Dark")
+)
 
 private fun formatReminderTime(hour: Int, minute: Int, is24Hour: Boolean): String {
     val safeHour = hour.coerceIn(0, 23)

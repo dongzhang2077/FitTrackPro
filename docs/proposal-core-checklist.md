@@ -38,14 +38,17 @@ Use this checklist after local verification passes (for example `./scripts/ci-ch
 
 ### 3) Dark Mode and Theme Customization
 
-- [~] Material3 dark theme definitions exist.
+- [x] Material3 dark theme definitions exist.
   - Evidence: `app/src/main/java/com/domcheung/fittrackpro/ui/theme/Theme.kt`
-- [ ] Light/Dark/System user setting with DataStore persistence and UI entry point.
-  - Current status: not wired end-to-end yet.
+- [x] Light/Dark/System user setting with DataStore persistence and UI entry point.
+  - Evidence: `app/src/main/java/com/domcheung/fittrackpro/data/local/UserPreferencesManager.kt`
+  - Evidence: `app/src/main/java/com/domcheung/fittrackpro/MainActivity.kt`
+  - Evidence: `app/src/main/java/com/domcheung/fittrackpro/presentation/profile/ProfileViewModel.kt`
+  - Evidence: `app/src/main/java/com/domcheung/fittrackpro/presentation/profile/ProfileScreen.kt`
 
 ## Current Blocking Gaps (Mandatory Scope)
 
-1. Theme customization: implement user-selectable Light/Dark/System + persistence.
+No mandatory proposal-core gaps currently open.
 
 ## Reminder Module Completion Checklist (Detailed)
 
@@ -60,3 +63,4 @@ Use this checklist after local verification passes (for example `./scripts/ci-ch
 
 - 2026-03-05: Checklist created and baseline status recorded.
 - 2026-03-05: Smart reminder snooze flow implemented and checklist updated.
+- 2026-03-06: Theme customization wired end-to-end and checklist updated.
