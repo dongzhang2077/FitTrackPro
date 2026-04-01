@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.domcheung.fittrackpro.data.repository.AuthRepository
 import com.domcheung.fittrackpro.data.local.UserPreferencesManager
+import com.domcheung.fittrackpro.data.repository.WorkoutRepository
 import com.domcheung.fittrackpro.domain.model.DailyWorkoutRecommendation
 import com.domcheung.fittrackpro.domain.model.RecommendationSource
 import com.domcheung.fittrackpro.domain.usecase.*
@@ -17,6 +18,7 @@ import javax.inject.Inject
 class HomeViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val userPreferencesManager: UserPreferencesManager,
+    private val workoutRepository: WorkoutRepository,
     private val getActiveWorkoutSessionUseCase: GetActiveWorkoutSessionUseCase,
     private val getWorkoutStatisticsUseCase: GetWorkoutStatisticsUseCase,
     private val getTodaysRecommendedPlanUseCase: GetTodaysRecommendedPlanUseCase,
@@ -125,8 +127,26 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isAnyOperationInProgress = true) }
             val userId = authRepository.getCurrentUser()?.uid.orEmpty()
+
+            if (userId.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isAnyOperationInProgress = false,
+                        errorMessage = "Please sign in to start a workout"
+                    )
+                }
+                return@launch
+            }
+
             val recommendation = getTodaysRecommendedPlanUseCase(userId)
-            val plan = recommendation.plan
+            var plan = recommendation.plan
+
+            // If no recommended plan, try to use the first available plan from user's plans
+            if (plan == null) {
+                val userPlans = workoutRepository.getUserWorkoutPlans(userId).first()
+                plan = userPlans.firstOrNull()
+            }
+
             if (plan != null) {
                 val result = startWorkoutSessionUseCase(plan.id, userId)
                 result.fold(
@@ -149,6 +169,7 @@ class HomeViewModel @Inject constructor(
                     }
                 )
             } else {
+                // No plans available, navigate to Workout tab to let user create one
                 _uiState.update {
                     it.copy(
                         isAnyOperationInProgress = false,
