@@ -791,6 +791,7 @@ class WorkoutRepositoryImpl @Inject constructor(
     /**
      * Seeds the database with initial sample workout plans for a user if they have none.
      * This ensures new users have content to interact with immediately.
+     * Uses real exercises from the database to ensure exercise IDs are valid.
      */
     override suspend fun seedInitialPlansIfEmpty(userId: String) {
         try {
@@ -801,7 +802,16 @@ class WorkoutRepositoryImpl @Inject constructor(
                 .map { plan -> plan.name }
                 .toSet()
 
-            val starterPlans = createSampleWorkoutPlans(userId)
+            // Get available exercises from database to ensure valid exercise IDs
+            val availableExercises = exerciseDao.getAllExercises().first()
+
+            // Only create templates if we have exercises available
+            if (availableExercises.isEmpty()) {
+                println("SEED_DEBUG: No exercises available, skipping plan seeding")
+                return
+            }
+
+            val starterPlans = createSampleWorkoutPlans(userId, availableExercises)
             val plansToInsert = if (currentPlans.isEmpty()) {
                 starterPlans
             } else {
@@ -812,19 +822,45 @@ class WorkoutRepositoryImpl @Inject constructor(
                 workoutPlanDao.insertWorkoutPlans(plansToInsert)
             }
         } catch (e: Exception) {
-            // Log error or handle it silently
-            // It's not critical if seeding fails, user can create plans manually
             println("Error seeding initial workout plans: ${e.message}")
         }
     }
 
-    private fun createSampleWorkoutPlans(userId: String): List<WorkoutPlan> {
+    /**
+     * Creates sample workout plans using real exercises from the database.
+     * This ensures that exercise IDs in plans reference actual exercises that exist.
+     */
+    private fun createSampleWorkoutPlans(userId: String, availableExercises: List<Exercise>): List<WorkoutPlan> {
+        if (availableExercises.isEmpty()) return emptyList()
+
+        /**
+         * Finds an exercise by name (case-insensitive partial match) from available exercises.
+         * Falls back to the first available exercise if no match found.
+         */
+        fun findExerciseIdByName(name: String): Int {
+            val normalizedName = name.lowercase()
+            val exercise = availableExercises.find { exercise ->
+                exercise.name.lowercase().contains(normalizedName) ||
+                normalizedName.contains(exercise.name.lowercase())
+            }
+            return exercise?.id ?: availableExercises.first().id
+        }
+
+        /**
+         * Gets the name for an exercise ID from available exercises.
+         * Falls back to the provided default name if not found.
+         */
+        fun getExerciseName(exerciseId: Int, defaultName: String): String {
+            return availableExercises.find { it.id == exerciseId }?.name ?: defaultName
+        }
+
         fun buildExercise(
-            exerciseId: Int,
-            exerciseName: String,
+            preferredName: String,
             orderIndex: Int,
             targets: List<Pair<Float, Int>>
         ): PlannedExercise {
+            val exerciseId = findExerciseIdByName(preferredName)
+            val exerciseName = getExerciseName(exerciseId, preferredName)
             return PlannedExercise(
                 exerciseId = exerciseId,
                 exerciseName = exerciseName,
@@ -876,9 +912,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "equipment_dumbbell_only"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(30f to 10, 30f to 10, 30f to 10)),
-                    buildExercise(1, "Bench Press", 1, listOf(20f to 10, 20f to 10, 20f to 10)),
-                    buildExercise(3, "Deadlift", 2, listOf(35f to 8, 35f to 8))
+                    buildExercise("Squat", 0, listOf(30f to 10, 30f to 10, 30f to 10)),
+                    buildExercise("Bench Press", 1, listOf(20f to 10, 20f to 10, 20f to 10)),
+                    buildExercise("Deadlift", 2, listOf(35f to 8, 35f to 8))
                 )
             ),
             template(
@@ -895,9 +931,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "hypertrophy"
                 ),
                 exercises = listOf(
-                    buildExercise(1, "Bench Press", 0, listOf(35f to 8, 37.5f to 8, 40f to 6)),
-                    buildExercise(2, "Squat", 1, listOf(35f to 8, 35f to 8)),
-                    buildExercise(3, "Deadlift", 2, listOf(40f to 6, 40f to 6))
+                    buildExercise("Bench Press", 0, listOf(35f to 8, 37.5f to 8, 40f to 6)),
+                    buildExercise("Squat", 1, listOf(35f to 8, 35f to 8)),
+                    buildExercise("Deadlift", 2, listOf(40f to 6, 40f to 6))
                 )
             ),
             template(
@@ -913,9 +949,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "intensity_medium"
                 ),
                 exercises = listOf(
-                    buildExercise(3, "Deadlift", 0, listOf(45f to 5, 50f to 5, 50f to 5)),
-                    buildExercise(2, "Squat", 1, listOf(30f to 10, 30f to 10)),
-                    buildExercise(1, "Bench Press", 2, listOf(25f to 12, 25f to 12))
+                    buildExercise("Deadlift", 0, listOf(45f to 5, 50f to 5, 50f to 5)),
+                    buildExercise("Squat", 1, listOf(30f to 10, 30f to 10)),
+                    buildExercise("Bench Press", 2, listOf(25f to 12, 25f to 12))
                 )
             ),
             template(
@@ -931,9 +967,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "compound"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(45f to 6, 50f to 5, 52.5f to 5)),
-                    buildExercise(3, "Deadlift", 1, listOf(50f to 5, 55f to 4)),
-                    buildExercise(1, "Bench Press", 2, listOf(25f to 8, 25f to 8))
+                    buildExercise("Squat", 0, listOf(45f to 6, 50f to 5, 52.5f to 5)),
+                    buildExercise("Deadlift", 1, listOf(50f to 5, 55f to 4)),
+                    buildExercise("Bench Press", 2, listOf(25f to 8, 25f to 8))
                 )
             ),
             template(
@@ -950,9 +986,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "hiit"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(20f to 15, 20f to 15)),
-                    buildExercise(1, "Bench Press", 1, listOf(15f to 15, 15f to 15)),
-                    buildExercise(3, "Deadlift", 2, listOf(25f to 12, 25f to 12))
+                    buildExercise("Squat", 0, listOf(20f to 15, 20f to 15)),
+                    buildExercise("Bench Press", 1, listOf(15f to 15, 15f to 15)),
+                    buildExercise("Deadlift", 2, listOf(25f to 12, 25f to 12))
                 )
             ),
             template(
@@ -968,9 +1004,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "recovery"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(15f to 12, 15f to 12)),
-                    buildExercise(1, "Bench Press", 1, listOf(12.5f to 12, 12.5f to 12)),
-                    buildExercise(3, "Deadlift", 2, listOf(20f to 10, 20f to 10))
+                    buildExercise("Squat", 0, listOf(15f to 12, 15f to 12)),
+                    buildExercise("Bench Press", 1, listOf(12.5f to 12, 12.5f to 12)),
+                    buildExercise("Deadlift", 2, listOf(20f to 10, 20f to 10))
                 )
             ),
             template(
@@ -986,9 +1022,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "compound"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(50f to 5, 55f to 5, 55f to 5)),
-                    buildExercise(1, "Bench Press", 1, listOf(40f to 6, 42.5f to 6, 45f to 5)),
-                    buildExercise(3, "Deadlift", 2, listOf(55f to 5, 60f to 4, 60f to 4))
+                    buildExercise("Squat", 0, listOf(50f to 5, 55f to 5, 55f to 5)),
+                    buildExercise("Bench Press", 1, listOf(40f to 6, 42.5f to 6, 45f to 5)),
+                    buildExercise("Deadlift", 2, listOf(55f to 5, 60f to 4, 60f to 4))
                 )
             ),
             template(
@@ -1005,9 +1041,9 @@ class WorkoutRepositoryImpl @Inject constructor(
                     "beginner"
                 ),
                 exercises = listOf(
-                    buildExercise(2, "Squat", 0, listOf(20f to 12, 20f to 12, 20f to 12)),
-                    buildExercise(1, "Bench Press", 1, listOf(15f to 12, 15f to 12, 15f to 12)),
-                    buildExercise(3, "Deadlift", 2, listOf(25f to 10, 25f to 10, 25f to 10))
+                    buildExercise("Squat", 0, listOf(20f to 12, 20f to 12, 20f to 12)),
+                    buildExercise("Bench Press", 1, listOf(15f to 12, 15f to 12, 15f to 12)),
+                    buildExercise("Deadlift", 2, listOf(25f to 10, 25f to 10, 25f to 10))
                 )
             )
         )
